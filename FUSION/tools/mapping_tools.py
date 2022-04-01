@@ -172,11 +172,11 @@ def orientation_calibration_cam(image_IR, image_RGB, method='prewitt', tot=None)
 
 
 def map_distance(start, stop, angle, image_ir, image_rgb, level=4,
-                 method='Prewitt', median=None, threshold=128, level_pyr=2, l_th=15, ratio=3, blur_filter=3,
+                 method='Prewitt', median=None, threshold=128, level_pyr=2, l_th=15, ratio=3, blur_filter=3, k_orient=1,
                  return_images=False, gradient_scaled=True, uniform=True):
+    ## For level=11, every single pixel step is computed
     if level == 11:
         level = stop - start + 1
-    temp = np.zeros([image_ir.shape[0], image_ir.shape[1], level])
     rgb_small = cv.pyrDown(image_rgb.GRAYSCALE())
     if l_th:
         l_th_ir = int(l_th * image_ir.max() / 255)
@@ -192,7 +192,7 @@ def map_distance(start, stop, angle, image_ir, image_rgb, level=4,
                                          method='Prewitt', kernel_blur=blur_filter, low_threshold=l_th_vis,
                                          ratio=ratio,
                                          level=level_pyr, orientation=True)
-        image_ir, _ = edges_extraction(image_ir,
+        edge_ir, _ = edges_extraction(image_ir,
                                        method=method, kernel_blur=blur_filter, low_threshold=l_th_ir, ratio=ratio,
                                        level=level_pyr, orientation=True)
         rgb_small, _ = edges_extraction(ImageCustom(rgb_small),
@@ -200,16 +200,16 @@ def map_distance(start, stop, angle, image_ir, image_rgb, level=4,
                                         ratio=ratio,
                                         level=level_pyr, orientation=True)
     elif method == 'Perso2':
-        image_ir, _ = edges_extraction(image_ir,
+        edge_ir, orient_ir = edges_extraction(image_ir,
                                        method=method, kernel_blur=blur_filter, low_threshold=l_th_ir,
                                        ratio=ratio,
                                        level=level_pyr, orientation=True)
-        rgb_small, _ = edges_extraction(ImageCustom(rgb_small),
+        rgb_small, orient_rgb = edges_extraction(ImageCustom(rgb_small),
                                         method=method, kernel_blur=blur_filter, low_threshold=l_th_vis,
                                         ratio=ratio,
                                         level=level_pyr, orientation=True)
     else:
-        image_ir, orient_ir = edges_extraction(image_ir,
+        edge_ir, orient_ir = edges_extraction(image_ir,
                                                method=method, kernel_blur=blur_filter, low_threshold=l_th_ir,
                                                ratio=ratio,
                                                level=level_pyr, orientation=True)
@@ -219,92 +219,20 @@ def map_distance(start, stop, angle, image_ir, image_rgb, level=4,
                                                  level=level_pyr, orientation=True)
     if gradient_scaled:
         clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        image_ir = clahe.apply(image_ir)
+        edge_ir = clahe.apply(edge_ir)
         rgb_small = clahe.apply(rgb_small)
-        if image_ir.max():
-            image_ir = image_ir / image_ir.max() * 255
+        if edge_ir.max():
+            edge_ir = edge_ir / edge_ir.max()*255
         if rgb_small.max():
-            rgb_small = rgb_small / rgb_small.max() * 255
-    image_ir = image_ir * 1.
+            rgb_small = rgb_small / rgb_small.max()*255
+    edge_ir = edge_ir * 1.
     rgb_small = rgb_small * 1.
     # rgb_small, image_ir = (rgb_small > threshold)*255, (image_ir > threshold)*255
     idx = np.linspace(start, stop, level)
     y_step = np.array([round(dx * math.sin(math.radians(angle))) for dx in idx])
     x_step = np.array([round(dx * math.cos(math.radians(angle))) for dx in idx])
-    k = 10
-    for i, dx in enumerate(idx):
-        if y_step[i] < 0:
-            if x_step[i] < 0:
-                if method == 'Perso2':
-                    temp[:y_step[i], :x_step[i], i] = (rgb_small[:y_step[i], :x_step[i]] * image_ir[-y_step[i]:,
-                                                                                           -x_step[i]:]).sum(axis=2)
-                else:
-                    temp[:y_step[i], :x_step[i], i] = rgb_small[:y_step[i], :x_step[i]] * image_ir[-y_step[i]:,
-                                                                                          -x_step[i]:] * \
-                                                      k / (orient_rgb[:y_step[i], :x_step[i]] - orient_ir[-y_step[i]:,
-                                                                                                -x_step[i]:] + 1)
-            elif x_step[i] == 0:
-                if method == 'Perso2':
-                    temp[:y_step[i], :, i] = (rgb_small[:y_step[i], :] * image_ir[-y_step[i]:, :]).sum(axis=2)
-                else:
-                    temp[:y_step[i], :, i] = rgb_small[:y_step[i], :] * image_ir[-y_step[i]:, :] * \
-                                             k / (orient_rgb[:y_step[i], :] - orient_ir[-y_step[i]:, :] + 1)
-            else:
-                if method == 'Perso2':
-                    temp[:y_step[i], :-x_step[i], i] = (rgb_small[:y_step[i], x_step[i]:] * image_ir[-y_step[i]:,
-                                                                                            :-x_step[i]]).sum(axis=2)
-                else:
-                    temp[:y_step[i], :-x_step[i], i] = rgb_small[:y_step[i], x_step[i]:] * image_ir[-y_step[i]:,
-                                                                                           :-x_step[i]] * \
-                                                       k / (orient_rgb[:y_step[i], x_step[i]:] - orient_ir[-y_step[i]:,
-                                                                                                 :-x_step[i]] + 1)
-        elif y_step[i] == 0:
-            if x_step[i] < 0:
-                if method == 'Perso2':
-                    temp[:, :x_step[i], i] = (rgb_small[:, :x_step[i]] * image_ir[:, -x_step[i]:]).sum(axis=2)
-                else:
-                    temp[:, :x_step[i], i] = rgb_small[:, :x_step[i]] * image_ir[:, -x_step[i]:] * \
-                                             k / (abs(orient_rgb[:, :x_step[i]] - orient_ir[:, -x_step[i]:]) + 1)
-            elif x_step[i] == 0:
-                if method == 'Perso2':
-                    temp[:, :, i] = (rgb_small[:, :] * image_ir[:, :]).sum(axis=2)
-                else:
-                    temp[:, :, i] = rgb_small[:, :] * image_ir[:, :] * \
-                                    k / (abs(orient_rgb[:, :] - orient_ir[:, :]) + 1)
-            else:
-                if method == 'Perso2':
-                    temp[:, :-x_step[i], i] = (rgb_small[:, x_step[i]:] * image_ir[:, :-x_step[i]]).sum(axis=2)
-                else:
-                    temp[:, :-x_step[i], i] = rgb_small[:, x_step[i]:] * image_ir[:, :-x_step[i]] * \
-                                              k / (abs(orient_rgb[:, x_step[i]:] - orient_ir[:, :-x_step[i]]) + 1)
-        else:
-            if x_step[i] < 0:
-                if method == 'Perso2':
-                    temp[:-y_step[i], :x_step[i], i] = (rgb_small[y_step[i]:, :x_step[i]] * image_ir[:-y_step[i],
-                                                                                            -x_step[i]:]).sum(axis=2)
-                else:
-                    temp[:-y_step[i], :x_step[i], i] = rgb_small[y_step[i]:, :x_step[i]] * image_ir[:-y_step[i],
-                                                                                           -x_step[i]:] * \
-                                                       k / (abs(orient_rgb[y_step[i]:, :x_step[i]] - orient_ir[
-                                                                                                     :-y_step[i],
-                                                                                                     -x_step[i]:]) + 1)
-            elif x_step[i] == 0:
-                if method == 'Perso2':
-                    temp[:-y_step[i]:, :, i + 1] = (rgb_small[y_step[i]:, :] * image_ir[:-y_step[i], :]).sum(axis=2)
-                else:
-                    temp[:-y_step[i]:, :, i + 1] = rgb_small[y_step[i]:, :] * image_ir[:-y_step[i], :] * \
-                                                   k / (abs(orient_rgb[y_step[i]:, :] - orient_ir[:-y_step[i], :]) + 1)
-            else:
-                if method == 'Perso2':
-                    temp[:-y_step[i]:, :-x_step[i], i] = (rgb_small[y_step[i]:, x_step[i]:] * image_ir[:-y_step[i],
-                                                                                              :-x_step[i]]).sum(axis=2)
-                else:
-                    temp[:-y_step[i]:, :-x_step[i], i] = rgb_small[y_step[i]:, x_step[i]:] * image_ir[:-y_step[i],
-                                                                                             :-x_step[i]] * \
-                                                         k / (abs(orient_rgb[y_step[i]:, x_step[i]:] - orient_ir[
-                                                                                                       :-y_step[i],
-                                                                                                       :-x_step[
-                                                                                                           i]]) + 1)
+    temp = edge_correlation(edge_ir, rgb_small, idx, x_step, y_step, orient_ir, orient_rgb, level, method, k_orient)
+
     mask = np.zeros([max(y_step.max() - y_step.min(), 1), max(x_step.max() - x_step.min(), 1)])
     temp = cv2.normalize(np.sqrt(temp), None, 0, 255, cv2.NORM_MINMAX)
     # base_maps = generate_support_map(temp.shape[:2], 0.4, min_slide=10, max_slide=255)
@@ -321,10 +249,10 @@ def map_distance(start, stop, angle, image_ir, image_rgb, level=4,
     if median > 1:
         neighbor = np.ones([median, median])
         maps = majority(maps, footprint=neighbor)  # median_filter(maps, size=median)
-    maps = maps * (rgb_small > 0)
+    maps = maps * (edge_ir > 0)
     # maps[maps == 0] = base_maps[maps == 0]
     if return_images:
-        return ImageCustom(maps), ImageCustom(image_ir), ImageCustom(rgb_small)
+        return ImageCustom(maps), ImageCustom(edge_ir), ImageCustom(rgb_small)
     return ImageCustom(maps)
 
 

@@ -771,14 +771,18 @@ class DepthMapWindow(BaseFramework):
         self._level_scale = None
         self.fig, self.ax = None, None
         # Set up the Slide and other choices
-        self._kernel_majority = tk.Scale(self._controlPanel, from_=0, to=10, orient=tk.HORIZONTAL, length=110, bg='white',
+        self._kernel_majority = tk.Scale(self._controlPanel, from_=0, to=10, orient=tk.HORIZONTAL, length=115, bg='white',
                                        command=self._apply, label='Majority filter radius')
         self._kernel_majority.place(x=130, y=90)
         self._kernel_majority.set(2)
         self._threshold = tk.Scale(self._controlPanel, from_=0, to=255, orient=tk.HORIZONTAL, length=110, bg='white',
                                    command=self._apply, label='Threshold')
         self._threshold.place(x=5, y=90)
-        self._threshold.set(30)
+        self._threshold.set(40)
+        self._orientation_weight = tk.Scale(self._controlPanel, from_=0, to=30, orient=tk.HORIZONTAL, length=110, bg='white',
+                                   command=self._apply, label='Orientation weight')
+        self._orientation_weight.place(x=5, y=150)
+        self._orientation_weight.set(1)
         ## FilterPanel definition
         self._filter_panel = tk.LabelFrame(self._controlPanel, text='Filter Tuning', bg='white', width=250, height=200)
         self._filter_panel.place(x=5, y=260)
@@ -809,12 +813,12 @@ class DepthMapWindow(BaseFramework):
                                 font=('Arial', 10))
         label_filter.place(x=15, y=5)
         self._uni = tk.BooleanVar(self)
-        self._uni.set(False)
+        self._uni.set(True)
         self._uniform = tk.Checkbutton(self._filter_panel, variable=self._uni, onvalue=True, offvalue=False,
                                               text='Uniform filtering', background='white', command=self._apply)
         self._uniform.place(x=120, y=90)
         self._norm = tk.BooleanVar(self)
-        self._norm.set(False)
+        self._norm.set(True)
         self._normalize_grad = tk.Checkbutton(self._filter_panel, variable=self._norm, onvalue=True, offvalue=False,
                                               text='Gradient scaled', background='white', command=self._apply)
         self._normalize_grad.place(x=120, y=60)
@@ -867,9 +871,10 @@ class DepthMapWindow(BaseFramework):
                                                    level_pyr=level,  # For Perso filter
                                                    l_th=l_th, ratio=ratio,  # For Canny
                                                    blur_filter=self._filter_blur.get() * 2 + 1,  # For each filter
+                                                   k_orient=(self._orientation_weight.get()),
                                                    return_images=True,
                                                    gradient_scaled=self._norm.get(),
-                                                   uniform=self._uni.get(),)
+                                                   uniform=self._uni.get())
         self._map_image = prepare_image(self.map.RGB(colormap='scale'), master=self)
         self._canvas.create_image(320, 240, image=self._map_image)
         if self._display_screen:
