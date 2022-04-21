@@ -7,13 +7,14 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
 import torch.utils.data
+from matplotlib import pyplot as plt
 from torch.autograd import Variable
 import torchvision.utils as vutils
 import torch.nn.functional as F
 import numpy as np
 import time
 from tensorboardX import SummaryWriter
-from datasets import __datasets__
+# from datasets import __datasets__
 from models import __models__
 from models.loss import model_loss_train_attn_only, model_loss_train_freeze_attn, model_loss_train, \
     model_loss_test
@@ -31,7 +32,7 @@ parser = argparse.ArgumentParser(
     description='Attention Concatenation Volume for Accurate and Efficient Stereo Matching (ACVNet)')
 parser.add_argument('--model', default='acvnet', help='select a model structure', choices=__models__.keys())
 parser.add_argument('--maxdisp', type=int, default=192, help='maximum disparity')
-parser.add_argument('--dataset', default='Lynred', help='dataset name', choices=__datasets__.keys())
+parser.add_argument('--dataset', default='Lynred', help='dataset name')#, choices=__datasets__.keys())
 parser.add_argument('--datapath', default="/data/Lynred/", help='data path')
 parser.add_argument('--trainlist', default='./filenames/sceneflow_train.txt', help='training list')
 parser.add_argument('--testlist', default='./filenames/Lynred.txt', help='testing list')
@@ -57,18 +58,18 @@ parser.add_argument('--mode', default='test', help='select train or test mode', 
 args = parser.parse_args()
 torch.manual_seed(args.seed)
 torch.cuda.manual_seed(args.seed)
-os.makedirs(args.logdir, exist_ok=True)
+# os.makedirs(args.logdir, exist_ok=True)
 
-# create summary logger
-print("creating new summary file")
-logger = SummaryWriter(args.logdir)
+# # create summary logger
+# print("creating new summary file")
+# logger = SummaryWriter(args.logdir)
 
-# dataset, dataloader
-StereoDataset = __datasets__[args.dataset]
-train_dataset = StereoDataset(args.datapath, args.trainlist, True)
-test_dataset = StereoDataset(args.datapath, args.testlist, False)
-TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=16, drop_last=True)
-TestImgLoader = DataLoader(test_dataset, args.test_batch_size, shuffle=False, num_workers=16, drop_last=False)
+# # dataset, dataloader
+# StereoDataset = __datasets__[args.dataset]
+# train_dataset = StereoDataset(args.datapath, args.trainlist, True)
+# test_dataset = StereoDataset(args.datapath, args.testlist, False)
+# TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=16, drop_last=True)
+# TestImgLoader = DataLoader(test_dataset, args.test_batch_size, shuffle=False, num_workers=16, drop_last=False)
 
 # model, optimizer
 model = __models__[args.model](args.maxdisp, args.attention_weights_only, args.freeze_attention_weights)
@@ -235,4 +236,9 @@ def ACVNet_test():
         train()
 
 
-ACVNet_test()
+image_L, image_R, maps, m, M = ACVNet_test()
+cv2.imshow('Disparity maps', maps)
+plt.matshow(maps)
+plt.show()
+cv2.waitKey(0)
+cv2.destroyAllWindows()
