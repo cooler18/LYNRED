@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 
 from FUSION.tools.data_management_tools import register_cmap_Lynred
-from FUSION.tools.gradient_tools import edges_extraction
+from FUSION.tools.gradient_tools import edges_extraction, Harr_pyr
 from FUSION.tools.manipulation_tools import *
 import numpy as np
 from matplotlib import cm
@@ -50,3 +50,20 @@ def region_based_fusion(gray, rgb, method='Prewitt', ksize=5, kernel_blur=5, low
     m_ir = edges_extraction(gray, method=method, kernel_size=ksize, kernel_blur=kernel_blur,
                             low_threshold=low_threshold, ratio=ratio, level=level)
     return m_ir, m_vis
+
+
+def Harr_fus(gray, rgb, ratio=0.5, level=1):
+    gray, rgb = size_matcher(gray, rgb)
+    rgb = rgb.LAB()
+    gray_text, gray_detail = Harr_pyr(gray, level=level)
+    rgb_text, rgb_detail = Harr_pyr(rgb[:, :, 0], level=level + 1)
+    image = ratio * (gray_text[level] + gray_detail[level]) + (1 - ratio) * (
+                rgb_text[level + 1] + rgb_detail[level + 1])
+    # for i in range(level):
+    #     image = cv.resize(cv.pyrUp(image), (gray_detail[level - i].shape[1], gray_detail[level - i].shape[0]))
+    #     image = image + gray_detail[level - i] * ratio + rgb_detail[level - i + 1] * (1 - ratio)
+    # print(image.min(), image.max())
+    image = cv.resize(cv.pyrUp(image), (rgb_detail[0].shape[1], rgb_detail[0].shape[0])) + rgb_detail[0]
+    image = image/image.max()*255
+    image = np.stack([image, rgb[:, :, 1], rgb[:, :, 2]], axis=2)
+    return ImageCustom(image, rgb).RGB()

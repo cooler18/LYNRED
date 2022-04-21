@@ -8,6 +8,7 @@ from pathlib import Path
 from scipy.ndimage import median_filter
 import tifffile
 
+
 class ImageCustom(np.ndarray):
     ##
     # A class defining the general basic framework of an image

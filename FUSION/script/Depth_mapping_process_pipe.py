@@ -9,6 +9,7 @@ from imutils.video import VideoStream
 from FUSION.classes.Camera import Camera
 from FUSION.tools import gradient_tools
 from FUSION.tools.data_management_tools import register_cmap, open_image
+from scipy.interpolate import RectBivariateSpline
 from FUSION.tools.manipulation_tools import *
 # from FUSION.tools.method_fusion import colormap_fusion
 from FUSION.tools.gradient_tools import *
@@ -67,7 +68,7 @@ class Depth_map_pipe:
     Algorithms:
         - global matching: minimize the global energy functions : E(d) = Edata(d) + Esmooth(d)
             ex: graph cut, belief propagation
-        - semi-global matching: 
+        - semi-global matching: Algorithm working just like a local matching with added ordering constraints and others.
         - local_matching: Try to find the best correlation of a part of the image in the other 
             by a sliding window search. Our method is based on this kind of algorithm.
             ex: SSD algorithm
@@ -90,7 +91,9 @@ class Depth_map_pipe:
         - Computation of the scale pyramid... etc.
         
     2) Computation of the disparity map
-        - 
+        - Some algorithm give a dense map, some other just a scarce one. 
+        We need to densify the scarce estimation in order to use it properly.
+        --> Densifyition by interpolation
     :param left: left image.
     :param right: right image.
     :param parameters: structure containing parameters of the algorithm.

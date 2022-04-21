@@ -97,7 +97,8 @@ class Application(BaseFramework):
         Fusion = tk.Menu(menubar, tearoff=0)
         Fusion.add_command(label="ColorMap fusion", command=self._colormap_fusion_panel)
         Fusion.add_command(label="simple Luminance fusion", command=self._luminance_fusion_panel)
-        Fusion.add_command(label="Gradient map fusion", command=self._gradient_map_fusion)
+        Fusion.add_command(label="Gradient map fusion", command=self._gradient_map_fusion_panel)
+        Fusion.add_command(label="Multi-scale fusion", command=self._multiscale_fusion_panel)
         menubar.add_cascade(label="Fusion", menu=Fusion)
 
         Calibration = tk.Menu(menubar, tearoff=0)
@@ -203,6 +204,8 @@ class Application(BaseFramework):
             self._filter_panel()
         elif self._current_panel == 'luminance_fusion':
             self._domain_change()
+        elif self._current_panel == 'multiscale_fusion':
+            self._fusion()
 
     def _specialized(self, master):
         self.master.title("Image Fusion App")
@@ -358,7 +361,7 @@ class Application(BaseFramework):
             self._activate("luminance_fusion")
             self._domain_change("<<ComboboxSelected>>")
 
-    def _gradient_map_fusion(self):
+    def _gradient_map_fusion_panel(self):
         global filter_gradient
         if self._current_panel == 'gradient_map_fusion':
             pass
@@ -400,6 +403,40 @@ class Application(BaseFramework):
             # place widgets
             self._filter_panel()
         # method="Canny", kernel_size=5, kernel_blur=3, low_threshold=5, high_threshold=15
+
+    def _multiscale_fusion_panel(self):
+        if self._current_panel == 'multiscale_fusion':
+            pass
+        else:
+            if hasattr(self, "_controlPanel"):
+                self._controlPanel.destroy()
+            self._canvas_FUS.destroy()
+            self._canvas_FUS = tk.Canvas(self._frame_fus, width=1250, height=900, background='white')
+            self._canvas_FUS.pack()
+            self._controlPanel = tk.Frame(self._frame_fus, bg='white', height=150, width=1250)
+            self._controlPanel.pack()
+            p = join(dirname(abspath('data_interface')), "interface", "data_interface")
+            scale = ['Harr', 'Wavelet']
+            self._list_scale_method = ttk.Combobox(self._controlPanel, values=scale, state="readonly")
+            self._list_scale_method.current(0)
+            self._list_scale_method.bind("<<ComboboxSelected>>", self._domain_change)
+            self._list_scale_method.place(x=5, y=0)
+            self._slide_ratio = tk.Scale(self._controlPanel, from_=0, to=100, orient=tk.HORIZONTAL, length=400,
+                                         command=self._fusion)
+            self._slide_ratio.place(x=5, y=50)
+            self._slide_ratio.set(50)
+            self._label_ratio = tk.Label(self._controlPanel, anchor='nw',
+                                         text='Visible', background='white')
+            self._label_ratio.place(x=10, y=100)
+            self._label_ratio = tk.Label(self._controlPanel, anchor='nw',
+                                         text='Infrared', background='white')
+            self._label_ratio.place(x=380, y=100)
+            self._level_ratio = tk.Scale(self._controlPanel, from_=0, to=5, orient=tk.HORIZONTAL, length=400,
+                                         command=self._fusion)
+            self._level_ratio.place(x=455, y=50)
+            self._level_ratio.set(2)
+            self._activate("multiscale_fusion")
+            self._domain_change("<<ComboboxSelected>>")
 
     def _colormap_change(self, event=None):
         if self._select.get() == 1 or self._select.get() == 2:
@@ -479,6 +516,8 @@ class Application(BaseFramework):
                 self._domain_change("<<ComboboxSelected>>")
             elif self._current_panel == 'gradient_map_fusion':
                 self._filter_panel()
+            elif self._current_panel == 'multiscale_fusion':
+                self._multiscale_fusion_panel()
         else:
             ratio = self._slide_ratio.get() / 100
             if self._current_panel == 'colormap_fusion':
@@ -529,7 +568,18 @@ class Application(BaseFramework):
                     self.FUS = ImageCustom(fusion_scaled(self.IR, self.VIS, ratio=ratio))
                 self._refresh(self.IR, 'ir')
                 self._refresh(self.VIS, 'vis')
+            elif self._current_panel == 'multiscale_fusion':
+                self._unlight()
+                scale_method = self._list_scale_method.get()
+                if scale_method == 'Harr':
+                    self.FUS = Harr_fus(self.IR_current_value, self.VIS_current_value,
+                                        ratio=ratio, level=self._level_ratio.get())
+                else:
+                    pass
+                    # self.FUS = Wavelet_fus(self.IR_current_value, self.VIS_current_value, ratio=ratio, domain=level)
             self._refresh(size=(1280, 960))
+
+
 
     # ########################################################################################################
 
@@ -720,6 +770,12 @@ class DepthMapWindow(BaseFramework):
 
         Display = tk.Menu(menubar, tearoff=0)
         Display.add_command(label="Display source images", command=self._display)
+        self.disparity_left = tk.BooleanVar(self)
+        self.disparity_left.set(1)
+        Display.add_radiobutton(label="Display left Disparity map", variable=self.disparity_left,
+                                value=True, command=self._apply)
+        Display.add_radiobutton(label="Display left Disparity map", variable=self.disparity_left,
+                                value=False, command=self._apply)
         menubar.add_cascade(label="Display", menu=Display)
 
         master.configure(menu=menubar)
@@ -778,7 +834,7 @@ class DepthMapWindow(BaseFramework):
         self._threshold = tk.Scale(self._controlPanel, from_=0, to=255, orient=tk.HORIZONTAL, length=110, bg='white',
                                    command=self._apply, label='Threshold')
         self._threshold.place(x=5, y=90)
-        self._threshold.set(40)
+        self._threshold.set(70)
         self._orientation_weight = tk.Scale(self._controlPanel, from_=0, to=30, orient=tk.HORIZONTAL, length=110, bg='white',
                                    command=self._apply, label='Orientation weight')
         self._orientation_weight.place(x=5, y=150)
@@ -787,18 +843,18 @@ class DepthMapWindow(BaseFramework):
         self._filter_panel = tk.LabelFrame(self._controlPanel, text='Filter Tuning', bg='white', width=250, height=200)
         self._filter_panel.place(x=5, y=260)
         ## Cascade list of filter
-        self._list_filter_gradient = ['Prewitt', 'Sobel', 'Canny', 'Laplacian', 'Roberts', 'Perso', 'Perso2']
+        self._list_filter_gradient = ['Prewitt', 'Sobel', 'Roberts', 'Perso', 'Perso2']
         self._filter_gradient = ttk.Combobox(self._filter_panel, values=self._list_filter_gradient, state="readonly")
         self._filter_gradient.current(0)
         self._filter_gradient.place(x=100, y=5)
-        self._filter_gradient.bind("<<ComboboxSelected>>", self._filterPanel)
+        self._filter_gradient.bind("<<ComboboxSelected>>", self._filterPanel(apply=False))
         ####################
         ## Command for the level of depth computed
         self._level_frame = tk.LabelFrame(self._controlPanel, text='Depth of the map', bg='white', width=250, height=80)
         self._level_frame.place(x=5, y=5)
         self._level = tk.Scale(self._level_frame, from_=3, to=11, orient=tk.HORIZONTAL, length=100, bg='white')
         self._level.place(x=5, y=5)
-        self._level.set(11)
+        self._level.set(10)
         self._apply_button = tk.Button(self._level_frame, text='Apply Level',
                                        font=('Arial', 12), bg='white', fg='black', command=self._change_scale)
         self._apply_button.place(x=130, y=5)
@@ -871,7 +927,7 @@ class DepthMapWindow(BaseFramework):
                                                    level_pyr=level,  # For Perso filter
                                                    l_th=l_th, ratio=ratio,  # For Canny
                                                    blur_filter=self._filter_blur.get() * 2 + 1,  # For each filter
-                                                   k_orient=(self._orientation_weight.get()),
+                                                   disparity_left=self.disparity_left.get(),
                                                    return_images=True,
                                                    gradient_scaled=self._norm.get(),
                                                    uniform=self._uni.get())
@@ -921,7 +977,7 @@ class DepthMapWindow(BaseFramework):
             cmap = plt.get_cmap('gnuplot')
             x = np.linspace(0.0, 1.0, 256)
         else:
-            cmap = plt.get_cmap('tab10')
+            cmap = plt.get_cmap('gnuplot')
             x = np.linspace(0.0, 1.0, level)
         cmap_rgb = cm.get_cmap(cmap)(x)[:, :3]
         cmap_rgb[0, :] = [0, 0, 0]

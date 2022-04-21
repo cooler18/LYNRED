@@ -1,26 +1,27 @@
-import random
-import os
-from os.path import *
-import tkinter as tk
-
-import lynred_py
-from cv2 import waitKey
-from imutils.video import VideoStream
-from numpy import linspace
-from math import tan, pi
-from FUSION.classes.Camera import Camera
-from FUSION.tools import gradient_tools
-from FUSION.tools.data_management_tools import register_cmap
-from FUSION.tools.manipulation_tools import *
+# import random
+# import os
+# from os.path import *
+# import tkinter as tk
+#
+# import lynred_py
+# from cv2 import waitKey
+# from imutils.video import VideoStream
+# from numpy import linspace
+# from math import tan, pi
+# from FUSION.classes.Camera import Camera
+# from FUSION.tools import gradient_tools
+# from FUSION.tools.data_management_tools import register_cmap
+# from FUSION.tools.manipulation_tools import *
 # from FUSION.tools.method_fusion import colormap_fusion
-from FUSION.tools.gradient_tools import *
-from FUSION.tools.mapping_tools import generate_support_map
-from FUSION.tools.method_fusion import *
-from FUSION.tools.registration_tools import *
-import numpy as np
-from FUSION.interface.Application import Application
-import time
-from scipy.ndimage import median_filter
+# from FUSION.tools.gradient_tools import *
+# from FUSION.tools.mapping_tools import generate_support_map
+# from FUSION.tools.method_fusion import *
+from ..tools.registration_tools import *
+# import numpy as np
+# from FUSION.interface.Application import Application
+# import time
+# from scipy.ndimage import median_filter
+from Stereo_matching.Algorithms.SGM.OpenCv_DepthMap.depthMapping import depthMapping
 
 #
 # url = "http://azorgz:tuorpmoi@192.168.1.150:8080/video"
@@ -29,24 +30,27 @@ from scipy.ndimage import median_filter
 # app = Camera(tk.Tk(), url)
 # app.mainloop()
 
+if __name__ == '__main__':
+    imageL, imageR, maps, m, M = depthMapping()
+    reconstruction_from_disparity(imageL, imageR, maps, m, M, orientation=0, verbose=True)
 
-p = join("D:\Travail\LYNRED\FUSION", "Images_grouped")
-path = p + "/visible"
-pathgray = p + "/infrared"
-pathfus = p + "/multispectral"
+# p = join("D:\Travail\LYNRED\FUSION", "Images_grouped")
+# path = p + "/visible"
+# pathgray = p + "/infrared"
+# pathfus = p + "/multispectral"
+# #
+# n = random.randint(0, len(os.listdir(path)) - 1)
+# imageRGB_name = path + "/VIS_" + str(n) + ".jpg"
+# imageIR_name = pathgray + "/IFR_" + str(n) + ".tiff"
+# imageFUS_name = pathfus + "/MUL_" + str(n) + ".jpg"
 #
-n = random.randint(0, len(os.listdir(path)) - 1)
-imageRGB_name = path + "/VIS_" + str(n) + ".jpg"
-imageIR_name = pathgray + "/IFR_" + str(n) + ".tiff"
-imageFUS_name = pathfus + "/MUL_" + str(n) + ".jpg"
-
-imageRGB = ImageCustom(imageRGB_name)
-imageIR = ImageCustom(imageIR_name)
-
-
-maps = generate_support_map((240, 320), 0.5, min_slide=-14, max_slide=23)
-plt.matshow(maps)
-plt.show()
+# imageRGB = ImageCustom(imageRGB_name)
+# imageIR = ImageCustom(imageIR_name)
+#
+#
+# maps = generate_support_map((240, 320), 0.5, min_slide=-14, max_slide=23)
+# plt.matshow(maps)
+# plt.show()
 # Wavelet_pyr(imageIR, level=1)
 # Wavelet_pyr(imageRGB.GRAYSCALE(), level=2)
 # k = 3
@@ -91,8 +95,8 @@ plt.show()
 # cv.imshow('texture RGB', text_rgb)
 
 # cv.imshow('seg', segment)
-cv.waitKey(0)
-cv.destroyAllWindows()
+# cv.waitKey(0)
+# cv.destroyAllWindows()
 # #
 # ir = np.transpose(np.array((imageIR, imageIR, imageIR)), (1, 2, 0))
 # print(ir.shape)

@@ -34,6 +34,7 @@ def crop_image(im, ratio=0, size=(640, 480)):
         image = im
     return image
 
+
 def size_matcher(gray, rgb, size=0):
     if isinstance(size, tuple):
         gray = ImageCustom(cv.resize(gray, size, interpolation=cv.INTER_AREA), gray)
@@ -127,6 +128,7 @@ def manual_calibration(image_ir, rgb):
     cv.destroyAllWindows()
     return pts_src, pts_dst, tform
 
+
 def choose(choice1, choice2):
     numpy_horizontal = np.hstack((choice1, choice2))
     global choice
@@ -139,7 +141,6 @@ def choose(choice1, choice2):
                 choice = 1
             else:
                 choice = 2
-
     choice = 0
     cv.imshow('Choose a result !', numpy_horizontal)
     cv.setMouseCallback('Choose a result !', mouseHandler)
