@@ -194,7 +194,9 @@ def test_sample(sample, compute_metrics=True):
         mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
         disp_gts = [disp_gt, disp_gt, disp_gt, disp_gt, disp_gt, disp_gt]
     else:
-        imgL, imgR = sample['left'], sample['right']
+        imgL, imgR = torch.cuda.FloatTensor(sample['left']), torch.cuda.FloatTensor(sample['right'])
+        imgL = torch.permute(imgL[None, :, :, :], (0, 3, 1, 2))
+        imgR = torch.permute(imgR[None, :, :, :], (0, 3, 1, 2))
     imgL = imgL.cuda()
     imgR = imgR.cuda()
     disp_ests = model(imgL, imgR)
@@ -226,9 +228,9 @@ def load_sample(p):
 def ACVNet_test():
     if args.mode == 'test':
         disp_available = False
-        p = "D:\Travail\LYNRED\Images\Day"
+        p = "/content/LYNRED/LynredDataset/Day"
         sample = load_sample(p)
-        image_outputs = test_sample(sample, compute_metric=disp_available)
+        image_outputs = test_sample(sample, compute_metrics=disp_available)
         m, M = image_outputs['disp_ests'].min(), image_outputs['disp_ests'].max()
         image_outputs['disp_ests'] = (image_outputs['disp_ests'] - m)/(M-m)
         return image_outputs['imgL'], image_outputs['imgR'], image_outputs['disp_ests'], m, M
