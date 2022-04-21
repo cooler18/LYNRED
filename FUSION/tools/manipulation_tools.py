@@ -93,7 +93,7 @@ def manual_calibration(image_ir, rgb):
     # Create a window
     im_temp = image_ir.copy()
     cv.namedWindow('image IR, first selection window')
-    cv.imshow('image IR, first selection window', im_temp)
+    cv.imshow('image IR, first selection window', cv.cvtColor(im_temp, cv.COLOR_RGB2BGR))
     cv.namedWindow('image RGB, second selection window')
     cv.imshow('image RGB, second selection window', image_rgb)
     cv.setMouseCallback('image IR, first selection window', mouseHandler)

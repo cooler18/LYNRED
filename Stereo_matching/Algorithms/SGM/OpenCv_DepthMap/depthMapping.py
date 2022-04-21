@@ -39,9 +39,9 @@ def depthMapping(source, min_disp, binary, verbose, edges):
     if source == 'drive_vis' or source == 'drive_inf':
         fold = np.random.randint(0, 1)
         if fold:
-            p_drive = 'D:\Travail\LYNRED\Day'
+            p_drive = 'D:\Travail\LYNRED\Images\Day'
         else:
-            p_drive = 'D:\Travail\LYNRED/Night'
+            p_drive = 'D:\Travail\LYNRED\Images/Night'
         p_drive_left = join(p_drive, 'slave', "visible")
         p_drive_right = join(p_drive, 'master', "visible")
         n = np.random.randint(0, len(os.listdir(p_drive_left)) - 1)

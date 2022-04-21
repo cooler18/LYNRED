@@ -609,23 +609,25 @@ class Application(BaseFramework):
         self._canvas_IR.create_image(328, 248, image=self._ir)
 
     def _manual_calibration(self):
-        selection = [32, 55]  # , 204, 230, 573]
-        p = join(abspath(dirname('tools')), 'tools', 'calibration_selection')
+        # selection = [32, 55]  # , 204, 230, 573]
+        # p = join(abspath(dirname('tools')), 'tools', 'calibration_selection')
         pts_src = []
         pts_dst = []
         tform = np.zeros([3, 3])
-        for num in selection:
-            image_ir = ImageCustom(join(p, 'IFR_' + str(num) + '.tiff'))
-            image_vis = ImageCustom(join(p, 'VIS_' + str(num) + '.jpg'))
-            image_ir, image_vis = size_matcher(image_ir, image_vis)
-            if len(pts_src) == 0:
-                pts_src, pts_dst, tform_temp = manual_calibration(image_ir, image_vis)
-            else:
-                pts_src_temp, pts_dst_temp, tform_temp = manual_calibration(image_ir, image_vis)
-                np.append(pts_src, pts_src_temp, axis=0)
-                np.append(pts_dst, pts_dst_temp, axis=0)
-            tform += tform_temp
-        tform /= len(selection)
+        # for num in selection:
+        image_ir = self.IR_origin
+        image_vis = self.VIS_origin
+        # image_ir = ImageCustom(join(p, 'IFR_' + str(num) + '.tiff'))
+        # image_vis = ImageCustom(join(p, 'VIS_' + str(num) + '.jpg'))
+        # image_ir, image_vis = size_matcher(image_ir, image_vis)
+        if len(pts_src) == 0:
+            pts_src, pts_dst, tform_temp = manual_calibration(image_ir, image_vis)
+        else:
+            pts_src_temp, pts_dst_temp, tform_temp = manual_calibration(image_ir, image_vis)
+            np.append(pts_src, pts_src_temp, axis=0)
+            np.append(pts_dst, pts_dst_temp, axis=0)
+        tform += tform_temp
+        # tform /= len(selection)
         tform_b, status = cv.findHomography(pts_src_temp, pts_dst_temp)
         height, width = image_vis.shape[:2]
         choice1 = ImageCustom(cv.warpPerspective(image_ir, tform, (width, height)), image_ir)
