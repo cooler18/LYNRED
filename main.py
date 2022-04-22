@@ -1,6 +1,7 @@
-from FUSION.tools.mapping_tools import densification_by_interpolation
+# from FUSION.tools.mapping_tools import densification_by_interpolation
 from FUSION.tools.registration_tools import *
-
+from Stereo_matching import __method_stereo__, __source_stereo__
+from Stereo_matching import *
 """
    #################################################################################
    SUMMARY:
@@ -36,7 +37,10 @@ from FUSION.tools.registration_tools import *
    between the two cameras over the x axis, this relation becomes : d=Bf/Z  
    with f the focal length (in pixels) , B the baseline
    Presentation of the pipe of processing:
-
+   
+    Alpha) DataLoader --> provide the data specified by "source"
+        If source is a Dataset name, the dataloader will prepare the computation of the whole dataset.
+    
    0) Image Pre-processing (if needed):
        - Image edges extraction
        - Change of color-space
@@ -55,32 +59,52 @@ from FUSION.tools.registration_tools import *
 
 if __name__ == '__main__':
 
-
     parser = argparse.ArgumentParser()
-    parser.add_argument('--method', default='SGM', help='Name of the method : SGM')
-    parser.add_argument('--source', default='drive', help='Either, teddy, cones or drive')
-    parser.add_argument('--disp', default=20, type=int, help='minimum disparity for the stereo pair')
-    parser.add_argument('--binary', default=False, action=argparse.BooleanOptionalAction,
-                        help='Classical SGM when False, SGBM when True')
-    parser.add_argument('--verbose', default=False, action=argparse.BooleanOptionalAction,
-                        help='Show or not the result')
-    parser.add_argument('--scale', default=0, type=int, help='Either, teddy, cones or drive')
+    """
+    These arguments set the method and the source for the disparity estimation
+    """
+    parser.add_argument('--method', default='SBGM', choices=__method_stereo__.keys(), help='Name of the method or the Net used')
+    parser.add_argument('--source', default='cones', choices=__source_stereo__.keys(), help='Either, teddy, cones or lynred')
+    """
+    These arguments set the different parameter of the disparity estimation
+    Some arguments are called only by a specific method, it wont be used if the method called is not the good one
+    """
+    parser.add_argument('--min_disp', default=20, type=int, help='minimum disparity for the stereo pair')
+    parser.add_argument('--max_disp', default=192, type=int, help='maximum disparity for the stereo pair')
+    """
+    These arguments set the parameters for the disparity maps completion or post processing
+    """
+    parser.add_argument('--scale', default=0, type=int, help='upscale the disparity map for reconstruction')
     parser.add_argument('--closing', default=0, type=int,
                         help='Apply or not a closing operator on the result, enter the footprint')
     parser.add_argument('--median', default=0, type=int,
                         help='Apply or not a median filter on the result, enter the footprint')
-    parser.add_argument('--edges', default=False, action=argparse.BooleanOptionalAction,
-                        help='Conserve the edges, displace only the texture')
-    parser.add_argument('--inpainting', default=False, action=argparse.BooleanOptionalAction,
-                        help='Use the Inpainting function to fill the gap in the new image')
-    parser.add_argument('--dense', default=False, action=argparse.BooleanOptionalAction,
-                        help='Add a densification step for the disparity map')
+    parser.add_argument('--edges', action='store_true', help='Conserve the edges, displace only the texture')
+    parser.add_argument('--inpainting', action='store_true',
+                       help='Use the Inpainting function to fill the gap in the new image')
+    parser.add_argument('--dense', action='store_true', help='Add a densification step for the disparity map')
+    """
+    These argument show the result of the operations along the way
+    """
+    parser.add_argument('--verbose', action='store_true', help='Show or not the results along the different steps')
+    # parser.add_argument('--edges', default=False, action=argparse.BooleanOptionalAction,
+    #                     help='Conserve the edges, displace only the texture')
+    # parser.add_argument('--inpainting', default=False, action=argparse.BooleanOptionalAction,
+    #                     help='Use the Inpainting function to fill the gap in the new image')
+    # parser.add_argument('--dense', default=False, action=argparse.BooleanOptionalAction,
+    #                     help='Add a densification step for the disparity map')
+    # parser.add_argument('--binary', default=False, action=argparse.BooleanOptionalAction,
+    #                     help='Classical SGM when False, SGBM when True')
+    # parser.add_argument('--binary', action='store_true', help='Classical SGM when False, SGBM when True')
+    # parser.add_argument('--verbose', default=False, action=argparse.BooleanOptionalAction,
+    #                     help='Show or not the result')
+
     args = parser.parse_args()
 
     method = args.method
     source = args.source
-    min_disp = args.disp
-    binary = args.binary
+    min_disp = args.min_disp
+    max_disp = args.max_disp
     verbose = args.verbose
     scale = args.scale
     closing_bool = args.closing
@@ -89,6 +113,13 @@ if __name__ == '__main__':
     inpainting = args.inpainting
     dense = args.dense
 
+
+    '''
+        Alpha-STEP: loading of the data according the source chosen
+        The "sample" returned is a dictionary with the keys "imgL" and "imgR"
+        The images are float array with values between 0 and 1
+    '''
+    sample = dataloader(__source_stereo__[source], source)
     '''
         1st-STEP: computation of the Disparity Map using the selected method
         SGM & SGBM :
@@ -98,10 +129,17 @@ if __name__ == '__main__':
     print(f"\n1) Computation of the disparity map...")
     if method == 'SGM':
         from Stereo_matching.Algorithms.SGM.OpenCv_DepthMap.depthMapping import depthMapping
-        imageL, imageR, maps, m, M = depthMapping(source, min_disp, binary, verbose, edges)
-    elif method == 'Net':
+        imageL, imageR, maps, m, M = depthMapping(sample, source, min_disp, max_disp, 0, verbose, edges)
+    if method == 'SBGM':
+        from Stereo_matching.Algorithms.SGM.OpenCv_DepthMap.depthMapping import depthMapping
+        imageL, imageR, maps, m, M = depthMapping(sample, source, min_disp, max_disp, 1, verbose, edges)
+    elif method == 'MobileStereoNet':
         from Stereo_matching.NeuralNetwork.MobileStereoNet.image_depth_estimation import mobilestereonet
-        imageL, imageR, maps, m, M = mobilestereonet(source, verbose=verbose)
+        imageL, imageR, maps, m, M = mobilestereonet(sample, verbose=verbose)
+    elif method == 'ACVNet':
+        from Stereo_matching.NeuralNetwork.ACVNet_main.ACVNet_test import ACVNet_test
+        imageL, imageR, maps, m, M = ACVNet_test(sample, max_disp, verbose)
+        imageL, imageR = np.uint8(imageL*255), np.uint8(imageR*255)
 
     '''
         2nd-STEP: Densification of the Disparity Map (optionnal) :
@@ -109,7 +147,7 @@ if __name__ == '__main__':
     if dense:
         print(f"\n2) Densification of the disparity map...")
         met = ["CloughTorcher", 'inpainting', 'griddata', "interpolation"]
-        maps = densification_by_interpolation(maps, method=met[3], verbose=verbose)
+        # maps = densification_by_interpolation(maps, method=met[3], verbose=verbose)
     else:
         print(f"\n2) No Densification...")
 
@@ -142,3 +180,4 @@ if __name__ == '__main__':
     plt.show()
     cv.waitKey(0)
     cv.destroyAllWindows()
+

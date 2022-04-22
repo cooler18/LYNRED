@@ -27,9 +27,9 @@ def highlight(widget):
 
 def random_image_opening(verbose=1):
     p = dirname(abspath('FUSION'))
-    pathrgb = p + "/Images_grouped/visible"
-    pathgray = p + "/Images_grouped/infrared"
-    pathfus = p + "/Images_grouped/multispectral"
+    pathrgb = p + "/../Images_grouped/visible"
+    pathgray = p + "/../Images_grouped/infrared"
+    pathfus = p + "/../Images_grouped/multispectral"
     random.seed()
     n = random.randint(0, len(os.listdir(pathrgb)) - 1)
     ext_rgb = search_ext(pathrgb, n)

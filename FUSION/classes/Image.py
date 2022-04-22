@@ -195,7 +195,6 @@ class ImageCustom(np.ndarray):
         i.cmap = 'LAB'
         return i
 
-
     # def reset_to_original_image(self):
     #     image = ImageCustom(self.origin, self)
     #     if len(image.shape) > 2:
@@ -222,4 +221,3 @@ class ImageCustom(np.ndarray):
         im = ImageCustom(median_filter(self, size), self)
         im.current_value = np.asarray(self)
         return im
-

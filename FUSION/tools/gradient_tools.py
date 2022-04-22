@@ -4,7 +4,7 @@ prewitt, sobel, grad, roberts
 """
 
 import numpy as np
-import textures as textures
+# import textures as textures
 from matplotlib import pyplot as plt
 from skimage.filters import edges
 from ..classes.Image import ImageCustom
@@ -40,27 +40,31 @@ def edges_extraction(image, method="Canny", kernel_size=3, kernel_blur=3, low_th
 
     elif method == "roberts" or method == 'Roberts':
         image = np.float_(image)
-        # Gx = np.array([[-1, 0], [0, 1]])
-        # Gy = np.array([[0, -1], [1, 0]])
-        Gx = np.array([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]])
-        Gy = Gx
+        Gx = np.array([[-1, 0], [0, 1]])
+        Gy = np.array([[0, -1], [1, 0]])
         Ix = edges.convolve(image, Gx, mode='wrap')
         Iy = edges.convolve(image, Gy, mode='wrap')
         I = Ix ** 2 + Iy ** 2
         if orientation:
-            orient = abs(abs(cv.phase(Ix, Iy, angleInDegrees=True) - 180) - 90)
+            abs(abs(cv.phase(Ix, Iy, angleInDegrees=True) - 180) - 90)
     elif method == "Sobel" or method == 'sobel':
         image = np.float_(image)
         Ix = cv.Sobel(image, cv.CV_64F, 1, 0, borderType=cv.BORDER_REFLECT_101)
         Iy = cv.Sobel(image, cv.CV_64F, 0, 1, borderType=cv.BORDER_REFLECT_101)
         I = np.uint8(np.sqrt(Ix ** 2 + Iy ** 2))
         if orientation:
-            orient = abs(abs(cv.phase(Ix, Iy, angleInDegrees=True) - 180) - 90)
-            # orient = cv.phase(Ix, Iy, angleInDegrees=True)
+            abs(abs(cv.phase(Ix, Iy, angleInDegrees=True) - 180) - 90)
     elif method == "Perso" or method == "perso":
         I = Harr_pyr(image, level=level, verbose=False, rebuilt=True)
     elif method == "Perso2" or method == "perso2":
         I = grad(image)
+        # text = image.copy()
+        # for i in range(level):
+        #     text = cv.pyrDown(text)
+        # for i in range(level):
+        #     text = cv.pyrUp(text)
+        # text = cv.resize(text, (image.shape[1], image.shape[0])) / 255
+        # I = abs(image / 255 - text) * 255
     else:
         I = cv.Canny(image, low_threshold, low_threshold * ratio)
     I = ImageCustom(I, i)
@@ -125,77 +129,74 @@ def Harr_pyr(image, level=0, verbose=False, rebuilt=False):
         return texture, details
 
 
-def edge_correlation(image_ir, image_rgb, idx, x_step, y_step, orient_ir, orient_rgb, level, method, disparity_left=True):
+def edge_correlation(image_ir, image_rgb, idx, x_step, y_step, orient_ir, orient_rgb, level, method, k_orient):
+    k = k_orient
     temp = np.zeros([image_ir.shape[0], image_ir.shape[1], level])
     for i, dx in enumerate(idx):
-        if disparity_left:
-            if y_step[i] < 0:
-                if x_step[i] < 0:
-                    temp[-y_step[i]:, -x_step[i]:, i] = \
-                        image_rgb[:y_step[i], :x_step[i]] * image_ir[-y_step[i]:, -x_step[i]:] * \
-                        abs(np.cos(orient_rgb[:y_step[i], :x_step[i]] - orient_ir[-y_step[i]:, -x_step[i]:]))
-                elif x_step[i] == 0:
-                    temp[-y_step[i]:, :, i] = image_rgb[:y_step[i], :] * image_ir[-y_step[i]:, :] * \
-                                                 abs(np.cos(orient_rgb[:y_step[i], :] - orient_ir[-y_step[i]:, :]))
-                else:
-                    temp[-y_step[i]:, :-x_step[i], i] = \
-                            image_rgb[:y_step[i], x_step[i]:] * image_ir[-y_step[i]:, :-x_step[i]] * \
-                            abs(np.cos(orient_rgb[:y_step[i], x_step[i]:] - orient_ir[-y_step[i]:, :-x_step[i]]))
-            elif y_step[i] == 0:
-                if x_step[i] < 0:
-                    temp[:, -x_step[i]:, i] = image_rgb[:, :x_step[i]] * image_ir[:, -x_step[i]:] * \
-                                                 abs(np.cos(orient_rgb[:, :x_step[i]] - orient_ir[:, -x_step[i]:]))
-                elif x_step[i] == 0:
-                    temp[:, :, i] = image_rgb[:, :] * image_ir[:, :] * abs(np.cos(orient_rgb[:, :] - orient_ir[:, :]))
-                else:
-                    temp[:, :-x_step[i], i] = image_rgb[:, x_step[i]:] * image_ir[:, :-x_step[i]] * \
-                                                  abs(np.cos(orient_rgb[:, x_step[i]:] - orient_ir[:, :-x_step[i]]))
-            else:
-                if x_step[i] < 0:
-                    temp[:-y_step[i], -x_step[i]:, i] = \
-                            image_rgb[y_step[i]:, :x_step[i]] * image_ir[:-y_step[i], -x_step[i]:] * \
-                            abs(np.cos(abs(orient_rgb[y_step[i]:, :x_step[i]] - orient_ir[:-y_step[i], -x_step[i]:])))
-                elif x_step[i] == 0:
-                    temp[:-y_step[i], i] = image_rgb[y_step[i]:, :] * image_ir[:-y_step[i], :] * \
-                                                       abs(np.cos(orient_rgb[y_step[i]:, :] - orient_ir[:-y_step[i], :]))
-                else:
-                    temp[:-y_step[i], :-x_step[i], i] = \
-                            image_rgb[y_step[i]:, x_step[i]:] * image_ir[:-y_step[i], :-x_step[i]] * \
-                            abs(np.cos(orient_rgb[y_step[i]:, x_step[i]:] - orient_ir[:-y_step[i], : -x_step[i]]))
-        else:
-            if y_step[i] < 0:
-                if x_step[i] < 0:
+        if y_step[i] < 0:
+            if x_step[i] < 0:
+                if method == 'Perso2':
                     temp[:y_step[i], :x_step[i], i] = \
-                            image_rgb[:y_step[i], :x_step[i]] * image_ir[-y_step[i]:, -x_step[i]:] * \
-                            abs(np.cos(orient_rgb[:y_step[i], :x_step[i]] - orient_ir[-y_step[i]:, -x_step[i]:]))
-                elif x_step[i] == 0:
-                    temp[:y_step[i], :, i] = image_rgb[:y_step[i], :] * image_ir[-y_step[i]:, :] * \
-                                                 abs(np.cos(orient_rgb[:y_step[i], :] - orient_ir[-y_step[i]:, :]))
+                        (image_rgb[:y_step[i], :x_step[i]] * image_ir[-y_step[i]:, -x_step[i]:]).sum(axis=2)
                 else:
-                    temp[:y_step[i], x_step[i]:, i] = \
-                            image_rgb[:y_step[i], x_step[i]:] * image_ir[-y_step[i]:, :-x_step[i]] * \
-                            abs(np.cos(orient_rgb[:y_step[i], x_step[i]:] - orient_ir[-y_step[i]:, :-x_step[i]]))
-            elif y_step[i] == 0:
-                if x_step[i] < 0:
-                    temp[:, :x_step[i], i] = image_rgb[:, :x_step[i]] * image_ir[:, -x_step[i]:] * \
-                                                 abs(np.cos(orient_rgb[:, :x_step[i]] - orient_ir[:, -x_step[i]:]))
-                elif x_step[i] == 0:
-                    temp[:, :, i] = image_rgb[:, :] * image_ir[:, :] * abs(np.cos(orient_rgb[:, :] - orient_ir[:, :]))
+                    temp[:y_step[i], :x_step[i], i] = \
+                        image_rgb[:y_step[i], :x_step[i]] * image_ir[-y_step[i]:, -x_step[i]:] / \
+                        (k * abs(orient_rgb[:y_step[i], :x_step[i]] - orient_ir[-y_step[i]:, -x_step[i]:]) + 1)
+            elif x_step[i] == 0:
+                if method == 'Perso2':
+                    temp[:y_step[i], :, i] = (image_rgb[:y_step[i], :] * image_ir[-y_step[i]:, :]).sum(axis=2)
                 else:
-                    temp[:, x_step[i]:, i] = image_rgb[:, x_step[i]:] * image_ir[:, :-x_step[i]] * \
-                                                  abs(np.cos(orient_rgb[:, x_step[i]:] - orient_ir[:, :-x_step[i]]))
+                    temp[:y_step[i], :, i] = image_rgb[:y_step[i], :] * image_ir[-y_step[i]:, :] / \
+                                             (k * abs(orient_rgb[:y_step[i], :] - orient_ir[-y_step[i]:, :]) + 1)
             else:
-                if x_step[i] < 0:
-                    temp[y_step[i]:, :x_step[i], i] = \
-                            image_rgb[y_step[i]:, :x_step[i]] * image_ir[:-y_step[i], -x_step[i]:] * \
-                            abs(np.cos(orient_rgb[y_step[i]:, :x_step[i]] - orient_ir[:-y_step[i], -x_step[i]:]))
-                elif x_step[i] == 0:
-                    temp[y_step[i]:, :, i + 1] = image_rgb[y_step[i]:, :] * image_ir[:-y_step[i], :] * \
-                                                       abs(np.cos(orient_rgb[y_step[i]:, :] - orient_ir[:-y_step[i], :]))
+                if method == 'Perso2':
+                    temp[:y_step[i], :-x_step[i], i] = (image_rgb[:y_step[i], x_step[i]:] * image_ir[-y_step[i]:,
+                                                                                            :-x_step[i]]).sum(axis=2)
                 else:
-                    temp[y_step[i]:, x_step[i]:, i] = \
-                            image_rgb[y_step[i]:, x_step[i]:] * image_ir[:-y_step[i], :-x_step[i]] * \
-                            abs(np.cos(orient_rgb[y_step[i]:, x_step[i]:] - orient_ir[:-y_step[i], : -x_step[i]]))
+                    temp[:y_step[i], :-x_step[i], i] = \
+                        image_rgb[:y_step[i], x_step[i]:] * image_ir[-y_step[i]:, :-x_step[i]] / \
+                        (k * abs(orient_rgb[:y_step[i], x_step[i]:] - orient_ir[-y_step[i]:, :-x_step[i]]) + 1)
+        elif y_step[i] == 0:
+            if x_step[i] < 0:
+                if method == 'Perso2':
+                    temp[:, :x_step[i], i] = (image_rgb[:, :x_step[i]] * image_ir[:, -x_step[i]:]).sum(axis=2)
+                else:
+                    temp[:, :x_step[i], i] = image_rgb[:, :x_step[i]] * image_ir[:, -x_step[i]:] / \
+                                             (k * abs(orient_rgb[:, :x_step[i]] - orient_ir[:, -x_step[i]:]) + 1)
+            elif x_step[i] == 0:
+                if method == 'Perso2':
+                    temp[:, :, i] = (image_rgb[:, :] * image_ir[:, :]).sum(axis=2)
+                else:
+                    temp[:, :, i] = image_rgb[:, :] * image_ir[:, :] / (k * abs(orient_rgb[:, :] - orient_ir[:, :]) + 1)
+            else:
+                if method == 'Perso2':
+                    temp[:, :-x_step[i], i] = (image_rgb[:, x_step[i]:] * image_ir[:, :-x_step[i]]).sum(axis=2)
+                else:
+                    temp[:, :-x_step[i], i] = image_rgb[:, x_step[i]:] * image_ir[:, :-x_step[i]] / \
+                                              (k * abs(orient_rgb[:, x_step[i]:] - orient_ir[:, :-x_step[i]]) + 1)
+        else:
+            if x_step[i] < 0:
+                if method == 'Perso2':
+                    temp[:-y_step[i], :x_step[i], i] = \
+                        (image_rgb[y_step[i]:, :x_step[i]] * image_ir[:-y_step[i], -x_step[i]:]).sum(axis=2)
+                else:
+                    temp[:-y_step[i], :x_step[i], i] = \
+                        image_rgb[y_step[i]:, :x_step[i]] * image_ir[:-y_step[i], -x_step[i]:] / \
+                        (k * abs(orient_rgb[y_step[i]:, :x_step[i]] - orient_ir[:-y_step[i], -x_step[i]:]) + 1)
+            elif x_step[i] == 0:
+                if method == 'Perso2':
+                    temp[:-y_step[i]:, :, i + 1] = (image_rgb[y_step[i]:, :] * image_ir[:-y_step[i], :]).sum(axis=2)
+                else:
+                    temp[:-y_step[i]:, :, i + 1] = image_rgb[y_step[i]:, :] * image_ir[:-y_step[i], :] / \
+                                                   (k * abs(orient_rgb[y_step[i]:, :] - orient_ir[:-y_step[i], :]) + 1)
+            else:
+                if method == 'Perso2':
+                    temp[:-y_step[i]:, :-x_step[i], i] = \
+                        (image_rgb[y_step[i]:, x_step[i]:] * image_ir[:-y_step[i], :-x_step[i]]).sum(axis=2)
+                else:
+                    temp[:-y_step[i]:, :-x_step[i], i] = \
+                        image_rgb[y_step[i]:, x_step[i]:] * image_ir[:-y_step[i], :-x_step[i]] / \
+                        (k * abs(orient_rgb[y_step[i]:, x_step[i]:] - orient_ir[:-y_step[i], : -x_step[i]]) + 1)
     return temp
 
 

@@ -20,7 +20,7 @@ from ..tools.image_processing_tools import histogram_equalization
 from ..tools.manipulation_tools import size_matcher, crop_image, manual_calibration
 from ..tools.mapping_tools import orientation_calibration_cam
 from ..tools.method_fusion import grayscale_fusion, colormap_fusion2
-import lynred_py
+# import lynred_py
 from tkinter import messagebox
 from time import gmtime, strftime
 
@@ -252,7 +252,7 @@ class Camera(BaseFramework):
         menubar.add_cascade(label="Calibration", menu=Calibration)
 
         self.res = tk.IntVar(value=0)
-        # Res = tk.OptionMenu(master, self.res, 'Original Size', "640x480", "720x480", "1280x720", "1280x960", "1920x1080", command=self._change_window_size)
+        # Res = tk.OptionMenu(right, self.res, 'Original Size', "640x480", "720x480", "1280x720", "1280x960", "1920x1080", command=self._change_window_size)
         Res = tk.Menu(menubar, tearoff=0)
         Res.add_radiobutton(label='Original Size', value=0, variable=self.res, command=self._change_window_size)
         Res.add_radiobutton(label="640x480", value=1, variable=self.res, command=self._change_window_size)
