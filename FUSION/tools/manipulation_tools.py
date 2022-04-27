@@ -79,7 +79,7 @@ def manual_calibration(image_ir, rgb):
                 cv.imshow('image IR, first selection window', im_temp)
             elif rightclick == 1:
                 cv.imshow('image RGB, second selection window', im_temp)
-        if event == cv.EVENT_RBUTTONDOWN:
+        if event == cv.EVENT_RBUTTONDOWN or event == cv.EVENT_MOUSEWHEEL:
             rightclick = 2
 
     rightclick = 0
@@ -91,14 +91,14 @@ def manual_calibration(image_ir, rgb):
     # Vector temp
     pts_temp = np.empty((0, 2), dtype=np.int32)
     # Create a window
-    im_temp = image_ir.copy()
+    im_temp = image_ir.BGR()
     cv.namedWindow('image IR, first selection window')
-    cv.imshow('image IR, first selection window', cv.cvtColor(im_temp, cv.COLOR_RGB2BGR))
+    cv.imshow('image IR, first selection window', im_temp)
     cv.namedWindow('image RGB, second selection window')
     cv.imshow('image RGB, second selection window', image_rgb)
     cv.setMouseCallback('image IR, first selection window', mouseHandler)
     while (1):
-        if len(pts_temp) == 50 or cv.waitKey(20) & 0xFF == 27 or rightclick == 2:
+        if len(pts_temp) == 12 or cv.waitKey(20) & 0xFF == 27 or rightclick == 2:
             rightclick = 1
             break
     # cv.destroyAllWindows()
@@ -106,7 +106,7 @@ def manual_calibration(image_ir, rgb):
 
     # Destination image
     # gray = image_rgb.GRAYSCALE()
-    im_temp = image_rgb.copy()
+    im_temp = image_rgb.BGR()
     pts_temp = np.empty((0, 2), dtype=np.int32)
     # Create a window
     height, width = im_temp.shape[:2]

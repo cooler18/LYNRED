@@ -536,8 +536,8 @@ class Application(BaseFramework):
     def _calibrate(self):
         p = join(abspath(dirname('tools')), 'tools', 'calibration_selection')
         try:
-            if os.stat(join(p, 'transform_matrix')).st_size > 0:
-                with open(join(p, 'transform_matrix'), "rb") as f:
+            if os.stat(join(p, 'transform_matrix_slaveToMaster_vis')).st_size > 0:
+                with open(join(p, 'transform_matrix_slaveToMaster_vis'), "rb") as f:
                     tform = pickle.load(f)
             else:
                 tform = np.zeros([3, 3])
@@ -588,7 +588,7 @@ class Application(BaseFramework):
         choice1 = cv.cvtColor(I1, cv.COLOR_LAB2BGR)
         choice2 = cv.cvtColor(I2, cv.COLOR_LAB2BGR)
         choice = choose(choice1, choice2)
-        with open(join(p, "transform_matrix"), "wb") as p:
+        with open(join(p, "transform_matrix_slaveToMaster_vis"), "wb") as p:
             if choice == 1:
                 pickle.dump(tform, p)
             else:

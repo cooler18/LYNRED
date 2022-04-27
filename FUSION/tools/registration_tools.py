@@ -1,5 +1,7 @@
 import argparse
+import pickle
 import time
+from os.path import join
 
 import cv2 as cv
 import timeit
@@ -44,7 +46,7 @@ def SIFT(image_dst, image_src, MIN_MATCH_COUNT=4, matcher='FLANN', name='00', lo
     # store all the good matches as per Lowe's ratio test.
     good = []
     if lowe_ratio == 0:
-        ratio_matches = 0.25
+        ratio_matches = 0.4
         k = 0.005
         while len(good) < MIN_MATCH_COUNT and ratio_matches < 0.95:
             good = []
@@ -117,6 +119,87 @@ def init_matcher(method='SIFT', matcher='FLANN', trees=5):
     return matcher
 
 
+def automatic_registration(imL, imR, matrix, nameL ="left_rect.png", nameR="right_rect.png"):
+    warp_matrix_rotation, warp_matrix_translation = matrix["matrix_rotation"], matrix["matrix_translation"]
+    CutY, CutZ = matrix["CutY"], matrix["CutZ"]
+    m, n = imL.shape[:2]
+    imL_aligned = cv.warpPerspective(imL.copy(), warp_matrix_rotation, (n, m),
+                                     flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+    imL_aligned = cv.warpAffine(imL_aligned, warp_matrix_translation, (n, m),
+                                flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+    imR_aligned = imR.copy()
+    if CutZ >= 0:
+        if CutY >= 0:
+            imR_aligned, imL_aligned = imR_aligned[CutZ:, CutY:], imL_aligned[CutZ:, CutY:]
+
+        else:
+            imR_aligned, imL_aligned = imR_aligned[CutZ:, :CutY], imL_aligned[CutZ:, :CutY]
+    else:
+        if CutY >= 0:
+            imR_aligned, imL_aligned = imR_aligned[:CutZ, CutY:], imL_aligned[:CutZ, CutY:]
+        else:
+            imR_aligned, imL_aligned = imR_aligned[:CutZ, :CutY], imL_aligned[:CutZ, :CutY]
+    p = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day"
+    cv.imwrite(p + '/left/' + nameL, cv.cvtColor(imL_aligned, cv.COLOR_RGB2BGR))
+    cv.imwrite(p + '/right/' + nameR, cv.cvtColor(imR_aligned, cv.COLOR_RGB2BGR))
+
+
+def manual_registration(imL, imR):
+    def nothing(x):
+        pass
+    cv.namedWindow('Fusion', cv.WINDOW_NORMAL)
+    m, n = imL.shape[:2]
+    cv.resizeWindow('Fusion', n, m)
+    cv.createTrackbar('Rotation Z', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Rotation X', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Rotation Y', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Translation Z', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Translation Y', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Translation X', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Cut Z', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Cut Y', 'Fusion', 250, 500, nothing)
+    while True:
+        # Updating the parameters based on the trackbar positions
+        Rz = (cv.getTrackbarPos('Rotation Z', 'Fusion') - 250)/10**6
+        Rx = (cv.getTrackbarPos('Rotation X', 'Fusion') - 250)/10**6
+        Ry = (cv.getTrackbarPos('Rotation Y', 'Fusion') - 250)/10**4
+        Tz = cv.getTrackbarPos('Translation Z', 'Fusion') - 250
+        Ty = cv.getTrackbarPos('Translation Y', 'Fusion') - 250
+        Tx = cv.getTrackbarPos('Translation X', 'Fusion')/500 + 0.5
+        CutY = cv.getTrackbarPos('Cut Y', 'Fusion') - 250
+        CutZ = cv.getTrackbarPos('Cut Z', 'Fusion') - 250
+        warp_matrix_rotation, _ = cv.Rodrigues(np.array([Rx, Rz, Ry]))
+        warp_matrix_translation = np.array([[Tx, 0., Ty/1.], [0., Tx, Tz/1.]])
+        imL_aligned = cv.warpPerspective(imL.copy(), warp_matrix_rotation, (n, m), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+        imL_aligned = cv.warpAffine(imL_aligned, warp_matrix_translation, (n, m), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+        imR_aligned = imR.copy()
+        if CutZ >= 0:
+            if CutY >= 0:
+                imR_aligned, imL_aligned = imR_aligned[CutZ:, CutY:], imL_aligned[CutZ:, CutY:]
+
+            else:
+                imR_aligned, imL_aligned = imR_aligned[CutZ:, :CutY], imL_aligned[CutZ:, :CutY]
+        else:
+            if CutY >= 0:
+                imR_aligned, imL_aligned = imR_aligned[:CutZ, CutY:], imL_aligned[:CutZ, CutY:]
+            else:
+                imR_aligned, imL_aligned = imR_aligned[:CutZ, :CutY], imL_aligned[:CutZ, :CutY]
+        final = np.uint8((imR_aligned / 2 + imL_aligned / 2))
+        cv.imshow("Fusion", cv.cvtColor(final, cv.COLOR_RGB2BGR)/255)
+        if cv.waitKey(1) == 27:
+            break
+    p = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day"
+    cv.imwrite(p + '/left/left_rect.png', cv.cvtColor(imL_aligned, cv.COLOR_RGB2BGR))
+    cv.imwrite(p + '/right/right_rect.png', cv.cvtColor(imR_aligned, cv.COLOR_RGB2BGR))
+    with open(join(p, "Calibration", "transform_matrix_slaveToMaster_vis"), "wb") as p:
+        pickle.dump({"matrix_rotation": warp_matrix_rotation,
+                     "matrix_translation": warp_matrix_translation,
+                     "CutY": CutY,
+                     "CutZ": CutZ}, p)
+    cv.destroyAllWindows()
+    return warp_matrix_rotation, warp_matrix_translation, CutY, CutZ
+
+
 def image_registration(im1, im2, warp_mode):
 
     # Convert images to grayscale
@@ -133,7 +216,7 @@ def image_registration(im1, im2, warp_mode):
         warp_matrix = np.eye(2, 3, dtype=np.float32)
 
     # Specify the number of iterations.
-    number_of_iterations = 1000
+    number_of_iterations = 100
 
     # Specify the threshold of the increment
     # in the correlation coefficient between two iterations
@@ -144,6 +227,7 @@ def image_registration(im1, im2, warp_mode):
 
     # Run the ECC algorithm. The results are stored in warp_matrix.
     (cc, warp_matrix) = cv.findTransformECC(im1_gray, im2_gray, warp_matrix, warp_mode, criteria, None, 3)
+    print(warp_matrix)
     if warp_mode == cv.MOTION_HOMOGRAPHY:
     # Use warpPerspective for Homography
         im2_aligned = cv.warpPerspective(im2, warp_matrix, (sz[1], sz[0]), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
@@ -156,4 +240,6 @@ def image_registration(im1, im2, warp_mode):
     cv.imshow("Image 2", im2.BGR())
     cv.imshow("Aligned Image 2", (im2_aligned/2 + im1/2)/255)
     cv.waitKey(0)
+    cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png', im1.BGR())
+    cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png', cv.cvtColor(im2_aligned, cv.COLOR_RGB2BGR))
     cv.destroyAllWindows()

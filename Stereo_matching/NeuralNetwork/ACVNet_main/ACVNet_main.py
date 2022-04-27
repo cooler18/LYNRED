@@ -193,23 +193,25 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 def test_sample(sample, model, max_disp, compute_metrics=True, verbose=False):
     model.eval()
     if compute_metrics:
-        imgL, imgR, disp_gt = sample['left'], sample['right'], sample['disparity']
+        imgL, imgR, disp_gt = sample['imgL'], sample['imgR'], sample['disparity']
         disp_gt = disp_gt.cuda()
         mask = (disp_gt < max_disp) & (disp_gt > 0)
         disp_gts = [disp_gt, disp_gt, disp_gt, disp_gt, disp_gt, disp_gt]
     else:
-        imgL, imgR = sample['imgL'], sample['imgR']
+        imgL, imgR = sample['imgL'].copy(), sample['imgR'].copy()
+        if imgR.shape[0] > 480:
+            imgL, imgR = cv2.pyrDown(imgL), cv2.pyrDown(imgR)
         imgL, imgR = torch.cuda.FloatTensor(imgL), torch.cuda.FloatTensor(imgR)
         imgL = torch.permute(imgL[None, :, :, :], (0, 3, 1, 2))
         imgR = torch.permute(imgR[None, :, :, :], (0, 3, 1, 2))
         padding_left = padding(imgL)
         padding_right = padding(imgR)
-        if verbose:
-            print(f"shape before : {imgR.shape}")
-        imgL, imgR = pad(imgL, padding_left, fill=0, padding_mode='edge'), pad(imgR, padding_right, fill=0,
-                                                                               padding_mode='edge')
-        if verbose:
-            print(f"shape after : {imgR.shape}")
+    if verbose:
+        print(f"    shape before : {imgR.shape}")
+    imgL, imgR = pad(imgL, padding_left, fill=0, padding_mode='edge'), pad(imgR, padding_right, fill=0,
+                                                                           padding_mode='edge')
+    if verbose:
+        print(f"    shape after : {imgR.shape}")
     imgL, imgR = imgL.cuda(), imgR.cuda()
     disp_ests = torch.squeeze(model(imgL, imgR)[0])
     if compute_metrics:
@@ -236,6 +238,8 @@ def test_sample(sample, model, max_disp, compute_metrics=True, verbose=False):
         else:
             imgL, imgR = np.array(imgL, dtype=np.float), np.array(imgR, dtype=np.float)
             disp_ests = np.array(disp_ests.cpu().detach(), dtype=np.float)
+        if sample['imgL'].shape[0] > 480:
+            disp_ests, imgL, imgR = cv2.pyrUp(disp_ests)*2, cv2.pyrUp(imgL), cv2.pyrUp(imgR)
         image_outputs = {"disp_est": disp_ests, "imgL": imgL, "imgR": imgR}
         return image_outputs
 
@@ -261,12 +265,3 @@ def padding(image):
     padding_final = [int(t_pad), int(l_pad), int(b_pad), int(r_pad)]
     # print(padding_final)
     return padding_final
-
-#
-# image_L, image_R, maps, m, M = ACVNet_test()
-# cv2.imshow('Disparity maps', maps)
-# cv2.imshow('Left image', image_L)
-# # plt.matshow(maps)
-# # plt.show()
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()

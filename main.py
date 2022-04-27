@@ -2,6 +2,8 @@
 from FUSION.tools.registration_tools import *
 from Stereo_matching import __method_stereo__, __source_stereo__
 from Stereo_matching import *
+from Stereo_matching.Tools.disparity_tools import disparity_post_process
+
 """
    #################################################################################
    SUMMARY:
@@ -65,6 +67,8 @@ if __name__ == '__main__':
     """
     parser.add_argument('--method', default='SBGM', choices=__method_stereo__.keys(), help='Name of the method or the Net used')
     parser.add_argument('--source', default='cones', choices=__source_stereo__.keys(), help='Either, teddy, cones or lynred')
+    parser.add_argument('--calib', action='store_true', help='Use the calibration images from the Lynred dataset')
+
     """
     These arguments set the different parameter of the disparity estimation
     Some arguments are called only by a specific method, it wont be used if the method called is not the good one
@@ -82,7 +86,11 @@ if __name__ == '__main__':
     parser.add_argument('--edges', action='store_true', help='Conserve the edges, displace only the texture')
     parser.add_argument('--inpainting', action='store_true',
                        help='Use the Inpainting function to fill the gap in the new image')
+    parser.add_argument('--copycat', action='store_true',
+                       help='Use the second image to fill the gap in the new image')
     parser.add_argument('--dense', action='store_true', help='Add a densification step for the disparity map')
+    parser.add_argument('--post_process', default=0, type=int, help='Post process threshold the disparity map and remove the '
+                                                                    'outlier')
     """
     These argument show the result of the operations along the way
     """
@@ -101,6 +109,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    calib = args.calib
     method = args.method
     source = args.source
     min_disp = args.min_disp
@@ -111,15 +120,17 @@ if __name__ == '__main__':
     median = args.median
     edges = args.edges
     inpainting = args.inpainting
+    copycat = args.copycat
     dense = args.dense
+    post_process = args.post_process
 
-
+    start = time.time()
     '''
         Alpha-STEP: loading of the data according the source chosen
         The "sample" returned is a dictionary with the keys "imgL" and "imgR"
         The images are float array with values between 0 and 1
     '''
-    sample = dataloader(__source_stereo__[source], source)
+    sample = dataloader(__source_stereo__[source], source, calib=calib)
     '''
         1st-STEP: computation of the Disparity Map using the selected method
         SGM & SGBM :
@@ -129,20 +140,20 @@ if __name__ == '__main__':
     print(f"\n1) Computation of the disparity map...")
     if method == 'SGM':
         from Stereo_matching.Algorithms.SGM.OpenCv_DepthMap.depthMapping import depthMapping
-        imageL, imageR, maps, m, M = depthMapping(sample, source, min_disp, max_disp, 0, verbose, edges)
+        imageL, imageR, disparity_matrix, m, M = depthMapping(sample, source, min_disp, max_disp, 0, verbose, edges)
     if method == 'SBGM':
         from Stereo_matching.Algorithms.SGM.OpenCv_DepthMap.depthMapping import depthMapping
-        imageL, imageR, maps, m, M = depthMapping(sample, source, min_disp, max_disp, 1, verbose, edges)
+        imageL, imageR, disparity_matrix, m, M = depthMapping(sample, source, min_disp, max_disp, 1, verbose, edges)
     elif method == 'MobileStereoNet':
         from Stereo_matching.NeuralNetwork.MobileStereoNet.image_depth_estimation import mobilestereonet
-        imageL, imageR, maps, m, M = mobilestereonet(sample, verbose=verbose)
+        imageL, imageR, disparity_matrix, m, M = mobilestereonet(sample, verbose=verbose)
     elif method == 'ACVNet':
         from Stereo_matching.NeuralNetwork.ACVNet_main.ACVNet_test import ACVNet_test
-        imageL, imageR, maps, m, M = ACVNet_test(sample, max_disp, verbose)
+        imageL, imageR, disparity_matrix, m, M = ACVNet_test(sample, max_disp, verbose)
         imageL, imageR = np.uint8(imageL*255), np.uint8(imageR*255)
 
     '''
-        2nd-STEP: Densification of the Disparity Map (optionnal) :
+        2nd-STEP: Densification and amelioration of the Disparity Map (optionnal) :
     '''
     if dense:
         print(f"\n2) Densification of the disparity map...")
@@ -150,33 +161,39 @@ if __name__ == '__main__':
         # maps = densification_by_interpolation(maps, method=met[3], verbose=verbose)
     else:
         print(f"\n2) No Densification...")
-
+    if post_process:
+        print(f"    Post processing of the disparity map...")
+        disparity_matrix = disparity_post_process(disparity_matrix, m, M, post_process)
     '''
         3rd-STEP: Reconstruction from Disparity Map :
     '''
     print(f"\n3) Reconstruction of the image from the disparity map...")
-    image_corrected = reconstruction_from_disparity(imageL, imageR, maps, m, M, scale, closing_bool, verbose, median,
-                                                    inpainting, orientation=0)
-
+    image_corrected = reconstruction_from_disparity(imageL, imageR, disparity_matrix, m, M, scale, closing_bool, verbose, median,
+                                                    inpainting, copycat, orientation=0)
     '''
         4th-STEP: Error Estimation :
         The following Errors are implemented : L1 - SSIM - RMSE
     '''
     print(f"\n4) Computation of the different indexes...")
-    if method == "Net":
-        if len(imageL.shape) > 2:
-            ref = cv.cvtColor(imageL, cv.COLOR_BGR2GRAY)
-        else:
-            ref = imageL
+    # if method == "Net":
+    #     if len(imageL.shape) > 2:
+    #         ref = cv.cvtColor(imageL, cv.COLOR_BGR2GRAY)
+    #         image_corrected_gray = cv.cvtColor(image_corrected, cv.COLOR_BGR2GRAY)
+    #     else:
+    #         ref = imageL
+    # else:
+    if len(imageR.shape) > 2:
+        ref = cv.cvtColor(imageR, cv.COLOR_BGR2GRAY)
+        image_corrected_gray = cv.cvtColor(image_corrected.astype(np.uint8), cv.COLOR_BGR2GRAY)
     else:
-        if len(imageR.shape) > 2:
-            ref = cv.cvtColor(imageR, cv.COLOR_BGR2GRAY)
-        else:
-            ref = imageR
-    error_estimation(image_corrected, ref, ignore_undefined=True)
+        ref = imageR
+        image_corrected_gray = image_corrected
+    error_estimation(image_corrected_gray, ref, ignore_undefined=True)
     cv.imshow('Reconstruct image', image_corrected / 255)
-    cv.imshow('Difference Reconstruct left Right', image_corrected / 255 - ref / 255)
-    plt.matshow(maps)
+    cv.imshow('Difference Reconstruct left Right', abs(image_corrected_gray / 255 - ref / 255))
+    plt.matshow(disparity_matrix)
+
+    print(f"Total time : {time.time() - start} seconds !")
     plt.show()
     cv.waitKey(0)
     cv.destroyAllWindows()

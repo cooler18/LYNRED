@@ -4,14 +4,14 @@ import cv2 as cv
 import numpy as np
 
 
-def dataloader(source_path, source):
+def dataloader(source_path, source, calib=False):
     if source == 'lynred' or source == 'lynred_inf':
         if source == 'lynred':
             source_path = join(source_path, 'visible')
         else:
             source_path = join(source_path, 'infrared')
         fold = np.random.randint(0, 1)
-        if fold:
+        if fold == 0:
             p_drive = join(source_path, 'Day')
         else:
             p_drive = join(source_path, 'Night')
@@ -21,8 +21,12 @@ def dataloader(source_path, source):
             n = np.random.randint(0, len(os.listdir(p_drive_left)) - 1)
         else:
             n = 0
-        l_path = join(p_drive_left, os.listdir(p_drive_left)[n])
-        r_path = join(p_drive_right, os.listdir(p_drive_right)[n])
+        l_path = join(p_drive_left, sorted(os.listdir(p_drive_left))[n])
+        r_path = join(p_drive_right, sorted(os.listdir(p_drive_right))[n])
+        if calib:
+            l_path = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png"
+            r_path = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png"
+
     elif source == 'teddy':
         l_path = join(source_path, 'left_teddy.png')
         r_path = join(source_path, 'right_teddy.png')

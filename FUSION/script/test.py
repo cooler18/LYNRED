@@ -43,22 +43,44 @@ from scipy.ndimage import median_filter
 # imageRGB = ImageCustom(imageRGB_name)
 # imageIR = ImageCustom(imageIR_name)
 
-imgL = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/1594113916853_03_4103616529.png"
-imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/1594113918043_03_4103616527.png"
+# imgL = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png"
+# imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png"
 
-imgL = ImageCustom(imgL)
-imgR = ImageCustom(imgR)
 
-image_registration(imgL, imgR, cv.MOTION_TRANSLATION)
-
-# pts_src, pts_dst = SIFT(imgR, imgL)
-# tform, status = cv.findHomography(pts_src['00'], pts_dst['00'])
+#
+# pts_src, pts_dst, tform = manual_calibration(imgL, imgR)
 # height, width = imgR.shape[:2]
-# im_temp = ImageCustom(cv.warpPerspective(imgL.BGR(), tform, (width, height)))
-# cv.imshow('Result of Homography', (im_temp/2+imgR.BGR()/2)/255)
+# im_temp = ImageCustom(cv.warpPerspective(imgL, tform, (width, height)), imgL)
+# # cv.imshow('Result of Homography', ImageCustom(imgL/2+imgR/2).BGR()/255)
+# # cv.waitKey(0)
+# # cv.destroyAllWindows()
+# image_registration(imgL, imgR, cv.MOTION_TRANSLATION)
+# imgL = ImageCustom(imgL)
+# imgR = ImageCustom(imgR)
+# image_registration(imgR, imgL, cv.MOTION_TRANSLATION)
+# imgR = imgR[:, :-150]
+# imgL = imgL[:, 150:]
+#
+# cv.imwrite("/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png", imgL.BGR())
+# cv.imwrite("/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png", imgR.BGR())
+# # pts_src, pts_dst = SIFT(imgR, imgL)
+# fondamental_mat, _ = cv.findFundamentalMat(pts_src, pts_dst, cv.RANSAC, 192, 0.99, 100)
+# print(fondamental_mat)
+# # h1, h2 = np.empty([3, 4]), np.empty([3, 4])
+# _, h1, h2 = cv.stereoRectifyUncalibrated(pts_src, pts_dst, fondamental_mat, imgL.shape[:2])
+# print(h1)
+# height, width = imgR.shape[:2]
+# im_temp1 = ImageCustom(cv.warpPerspective(imgL.BGR(), h1, (width, height)))
+# im_temp2 = ImageCustom(cv.warpPerspective(imgR.BGR(), h2, (width, height)))
+# cv.imshow('Result of Homography', (im_temp1/255))
+# cv.imshow('Result of Homography 2', (im_temp2/255))
 # cv.waitKey(0)
 # cv.destroyAllWindows()
-# Wavelet_pyr(imageIR, level=1)
+# cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png', im_temp1)
+# cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png', im_temp2)
+#
+# # Wavelet_p
+# yr(imageIR, level=1)
 # Wavelet_pyr(imageRGB.GRAYSCALE(), level=2)
 # k = 3
 # gray_blur = cv.bilateralFilter(imageIR, k, k * 2, k / 2)  # To perserve edges
