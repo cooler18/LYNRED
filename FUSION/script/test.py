@@ -1,168 +1,71 @@
 import random
-import os
-from os.path import *
-import tkinter as tk
-
-# import lynred_py
+import os, sys
+# from os.path import *
+# import tkinter as tk
 import cv2
-from cv2 import waitKey
-from imutils.video import VideoStream
-from numpy import linspace
-from math import tan, pi
-from FUSION.classes.Camera import Camera
-from FUSION.tools import gradient_tools
-from FUSION.tools.data_management_tools import register_cmap
-from FUSION.tools.manipulation_tools import *
-# from FUSION.tools.method_fusion import colormap_fusion
-from FUSION.tools.gradient_tools import *
-from FUSION.tools.mapping_tools import generate_support_map
+
+from FUSION.script.image_management import name_generator
+from Stereo_matching.Tools.disparity_tools import reprojection_disparity
+
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(SCRIPT_DIR)
+sys.path.append(os.path.dirname(SCRIPT_DIR))
+# import lynred_py
+# import cv2
+# from cv2 import waitKey
+# from imutils.video import VideoStream
+# from numpy import linspace
+# from math import tan, pi
+# from FUSION.classes.Camera import Camera
+# from FUSION.tools import gradient_tools
+# from FUSION.tools.data_management_tools import register_cmap
+# from FUSION.tools.manipulation_tools import *
+# # from FUSION.tools.method_fusion import colormap_fusion
+# from FUSION.tools.gradient_tools import *
+# from FUSION.tools.mapping_tools import generate_support_map
 from FUSION.tools.method_fusion import *
 from FUSION.tools.registration_tools import *
-import numpy as np
-from FUSION.interface.Application import Application
-import time
-from scipy.ndimage import median_filter
-
+# import numpy as np
+# from FUSION.interface.Application import Application
+# import time
+# from scipy.ndimage import median_filter
 #
-# url = "http://azorgz:tuorpmoi@192.168.1.150:8080/video"
-# # url = "http://azorgz:tuorpmoi@10.124.255.8:8080/video"
-#
-# app = Camera(tk.Tk(), url)
-# app.mainloop()
+# from Stereo_matching.Tools.disparity_tools import reprojection_disparity
 
 
-# p = join("D:\Travail\LYNRED\FUSION", "Images_grouped")
-# path = p + "/visible"
-# pathgray = p + "/infrared"
-# pathfus = p + "/multispectral"
-# #
-# n = random.randint(0, len(os.listdir(path)) - 1)
-# imageRGB_name = path + "/VIS_" + str(n) + ".jpg"
-# imageIR_name = pathgray + "/IFR_" + str(n) + ".tiff"
-# imageFUS_name = pathfus + "/MUL_" + str(n) + ".jpg"
-# imageRGB = ImageCustom(imageRGB_name)
-# imageIR = ImageCustom(imageIR_name)
 
-# imgL = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png"
-# imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png"
+# with open("/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/hybrid/Calibration/transform_matrix", "rb") as f:
+#     disparity = np.array(pickle.load(f))
+# print(disparity)
+Time = 'Day'
+number = name_generator(random.randint(0, 99))
+im_type = 'visible'
+
+im_infrared_aligned = ImageCustom("/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/hybrid/infrared_projected/left"+ number + ".png")
+imgR = ImageCustom("/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/hybrid/right/right" + number + ".png").BGR()
+# lab = imgR.LAB()
+# lab[lab[:, :, 0] > 250, 0] = im_infrared_aligned[lab[:, :, 0] > 250]
+# imgR = lab.BGR()
+b, g, r = imgR[:, :, 0], imgR[:, :, 1], imgR[:, :, 2]
+b = b#/2 + r / 4 + g / 4
+r = 3*r / 4 + im_infrared_aligned / 4
+g = im_infrared_aligned / 2 + g/2
+imgL = np.stack([b, g, r], axis=2)/255
 
 
-#
-# pts_src, pts_dst, tform = manual_calibration(imgL, imgR)
-# height, width = imgR.shape[:2]
-# im_temp = ImageCustom(cv.warpPerspective(imgL, tform, (width, height)), imgL)
-# # cv.imshow('Result of Homography', ImageCustom(imgL/2+imgR/2).BGR()/255)
-# # cv.waitKey(0)
-# # cv.destroyAllWindows()
-# image_registration(imgL, imgR, cv.MOTION_TRANSLATION)
-# imgL = ImageCustom(imgL)
-# imgR = ImageCustom(imgR)
-# image_registration(imgR, imgL, cv.MOTION_TRANSLATION)
-# imgR = imgR[:, :-150]
-# imgL = imgL[:, 150:]
-#
-# cv.imwrite("/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png", imgL.BGR())
-# cv.imwrite("/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png", imgR.BGR())
-# # pts_src, pts_dst = SIFT(imgR, imgL)
-# fondamental_mat, _ = cv.findFundamentalMat(pts_src, pts_dst, cv.RANSAC, 192, 0.99, 100)
-# print(fondamental_mat)
-# # h1, h2 = np.empty([3, 4]), np.empty([3, 4])
-# _, h1, h2 = cv.stereoRectifyUncalibrated(pts_src, pts_dst, fondamental_mat, imgL.shape[:2])
-# print(h1)
-# height, width = imgR.shape[:2]
-# im_temp1 = ImageCustom(cv.warpPerspective(imgL.BGR(), h1, (width, height)))
-# im_temp2 = ImageCustom(cv.warpPerspective(imgR.BGR(), h2, (width, height)))
-# cv.imshow('Result of Homography', (im_temp1/255))
-# cv.imshow('Result of Homography 2', (im_temp2/255))
-# cv.waitKey(0)
-# cv.destroyAllWindows()
-# cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png', im_temp1)
-# cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png', im_temp2)
-#
-# # Wavelet_p
-# yr(imageIR, level=1)
-# Wavelet_pyr(imageRGB.GRAYSCALE(), level=2)
-# k = 3
-# gray_blur = cv.bilateralFilter(imageIR, k, k * 2, k / 2)  # To perserve edges
 
-# 3x3 sobel filters for edge detection
-# sobel_x = np.array([[-1, 0, 1],
-#                     [-2, 0, 2],
-#                     [-1, 0, 1]])
-# sobel_y = np.array([[-1, -2, -1],
-#                     [0, 0, 0],
-#                     [1, 2, 1]])
-#
-# # Filter the blurred grayscale images using filter2D
-# filtered_blurred_x = cv.filter2D(gray_blur, cv.CV_32F, sobel_x)
-# filtered_blurred_y = cv.filter2D(gray_blur, cv.CV_32F, sobel_y)
-#
-# mag = cv.magnitude(filtered_blurred_x, filtered_blurred_y)
-# orien = cv.phase(filtered_blurred_x, filtered_blurred_y, angleInDegrees=True)
-# orien = orien / 2.  # Go from 0:360 to 0:180
-# hsv = np.zeros_like(cv.resize(imageRGB, (imageIR.shape[1], imageIR.shape[0])))
-# hsv[..., 0] = orien  # H (in OpenCV between 0:180)
-# hsv[..., 1] = 255  # S
-# hsv[..., 2] = cv.normalize(mag, None, 0, 255, cv.NORM_MINMAX)  # V 0:255
-#
-# bgr = cv.cvtColor(hsv, cv.COLOR_HSV2BGR)
-# cv.imshow("Color coded edges", bgr)
-# cv.waitKey(0)
+# fusion = lab.BGR()
 
-# rgb = cv.resize(imageRGB.GRAYSCALE(), (imageIR.shape[1], imageIR.shape[0]))
-# text = cv.resize(cv.pyrUp(cv.pyrUp(cv.pyrUp(cv.pyrDown(cv.pyrDown(cv.pyrDown(imageIR)))))), (imageIR.shape[1], imageIR.shape[0]))/255
-# text_rgb = cv.resize(cv.pyrUp(cv.pyrUp(cv.pyrUp(cv.pyrDown(cv.pyrDown(cv.pyrDown(rgb)))))), (imageIR.shape[1], imageIR.shape[0]))/255
-# detail = abs(imageIR/255 - text)
-# detail = detail/detail.max()
-# detail_rgb = (abs(rgb/255 - text))
-# detail_rgb = detail_rgb/detail_rgb.max()
-# cv.imshow('original', imageIR)
-# cv.imshow('detail', detail)
-# cv.imshow('texture', text)
-# cv.imshow('original RGB', rgb)
-# cv.imshow('detail RGB', detail_rgb)
-# cv.imshow('texture RGB', text_rgb)
+cv.imshow('Modified Infrared image', imgL)
+cv.imshow('Infrared image', im_infrared_aligned)
+cv.imshow('Color image', imgR)
+# fus = (imgR*0.5 + imgL*0.5)/255
+# cv.imshow('new_image', imgL)depth
+# cv.imshow('image', disparity/m)
+cv.waitKey(0)
 
-# cv.imshow('seg', segment)
-
-# #
-# ir = np.transpose(np.array((imageIR, imageIR, imageIR)), (1, 2, 0))
-# print(ir.shape)
-# #
-# imageIR_text, imageIR_grad = Harr_pyr(imageIR, level=0, verbose=False, rebuilt=False)
-# imageIR_grad, imageIR_text = imageIR_grad[0], imageIR_text[0]
-# imageIR_grad = imageIR_grad/imageIR_grad.max()*255
-#
-# imageRGB_text, imageRGB_grad = Harr_pyr(imageRGB.GRAYSCALE(), level=0, verbose=False, rebuilt=False)
-# imageRGB_grad, imageRGB_text = imageRGB_grad[0], imageRGB_text[0]
-# imageRGB_grad = imageRGB_grad/imageRGB_grad.max()*255
-#
-# imageIR_fake_rgb = np.zeros([imageIR.shape[0], imageIR.shape[1], 3])
-# imageIR_fake_rgb[:, :, 0] = imageIR
-# imageIR_fake_rgb[:, :, 1] = imageIR_text*imageIR
-# imageIR_fake_rgb[:, :, 2] = imageIR_grad
-#
-# imageRGB_fake_rgb = np.zeros([imageRGB.shape[0], imageRGB.shape[1], 3])
-# imageRGB_fake_rgb[:, :, 0] = imageRGB.GRAYSCALE()
-# imageRGB_fake_rgb[:, :, 1] = imageRGB_text*imageRGB.GRAYSCALE()
-# imageRGB_fake_rgb[:, :, 2] = imageRGB_grad
-#
-# imageIR_fake_rgb = ImageCustom(imageIR_fake_rgb)
-# imageIR_fake_rgb.cmap = 'HSV'
-# imageRGB_fake_rgb = ImageCustom(imageRGB_fake_rgb)
-# imageRGB_fake_rgb.cmap = 'HSV'
-#
-# cv.imshow('Fake image IR', imageIR_fake_rgb.RGB())
-# cv.imshow('Fake image RGB', imageRGB_fake_rgb.RGB())
-# cv.waitKey(0)
-# cv.destroyAllWindows()
-
-#
-# temp = np.zeros([imageIR.shape[0], imageIR.shape[1], 3])
-# temp[:, :, 0] = imageIR
-# temp[:, :, 1] = imageIR
-# temp[:, :, 2] = imageIR
-# temp = ImageCustom(temp, imageIR)
-# start = time.time()
-# imgray = ImageCustom(cv.pyrDown(imageRGB.GRAYSCALE()))
-# rgb = cv.pyrDown(imageRGB)
+with open("/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/hybrid/new_disparity/disp" + number, "rb") as f:
+    new_disparity = np.array(pickle.load(f))/2
+depth = 100 / (new_disparity + 0.005)
+depth[depth > 50] = 50
+depth = 1 - depth/50

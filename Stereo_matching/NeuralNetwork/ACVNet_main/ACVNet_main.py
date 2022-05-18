@@ -28,6 +28,8 @@ from os.path import join
 # from apex import amp
 import cv2
 
+from Stereo_matching.Tools.dataloader import data_superloader
+
 cudnn.benchmark = True
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 
@@ -190,78 +192,140 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 
 # test one sample
 @make_nograd_func
-def test_sample(sample, model, max_disp, compute_metrics=True, verbose=False):
-    model.eval()
-    if compute_metrics:
-        imgL, imgR, disp_gt = sample['imgL'], sample['imgR'], sample['disparity']
-        disp_gt = disp_gt.cuda()
-        mask = (disp_gt < max_disp) & (disp_gt > 0)
-        disp_gts = [disp_gt, disp_gt, disp_gt, disp_gt, disp_gt, disp_gt]
-    else:
-        imgL, imgR = sample['imgL'].copy(), sample['imgR'].copy()
-        if imgR.shape[0] > 480:
-            imgL, imgR = cv2.pyrDown(imgL), cv2.pyrDown(imgR)
+def test_sample(sample, model, threshold=0, verbose=False, time_of_day='Day', im_type='visible',
+                clean=False, path_save=None, colormap='inferno'):
+
+    def simple_inference(sample, model):
+        # imgL, imgR = sample['imgL'].copy(), sample['imgR'].copy()
+        if sample['imgR'].shape[0] > 480:
+            imgR = cv2.pyrDown(sample['imgR'])
+        else:
+            imgR = sample['imgR'].copy()
+        if sample['imgL'].shape[0] > 480:
+            imgL = cv2.pyrDown(sample['imgL'])
+        else:
+            imgL = sample['imgL'].copy()
+        if len(imgR.shape) == 2:
+            imgR = np.stack([imgR, imgR, imgR], axis=2)
+        if len(imgL.shape) == 2:
+            imgL = np.stack([imgL, imgL, imgL], axis=2)
         imgL, imgR = torch.cuda.FloatTensor(imgL), torch.cuda.FloatTensor(imgR)
         imgL = torch.permute(imgL[None, :, :, :], (0, 3, 1, 2))
         imgR = torch.permute(imgR[None, :, :, :], (0, 3, 1, 2))
         padding_left = padding(imgL)
         padding_right = padding(imgR)
-    if verbose:
-        print(f"    shape before : {imgR.shape}")
-    imgL, imgR = pad(imgL, padding_left, fill=0, padding_mode='edge'), pad(imgR, padding_right, fill=0,
-                                                                           padding_mode='edge')
-    if verbose:
-        print(f"    shape after : {imgR.shape}")
-    imgL, imgR = imgL.cuda(), imgR.cuda()
-    disp_ests = torch.squeeze(model(imgL, imgR)[0])
-    if compute_metrics:
-        loss = model_loss_test(disp_ests, disp_gt, mask)
-        scalar_outputs = {"loss": loss}
-        image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gts, "imgL": imgL, "imgR": imgR}
-        image_outputs["errormap"] = [disp_error_image_func.apply(disp_est, disp_gt) for disp_est in disp_ests]
-        scalar_outputs["EPE"] = [EPE_metric(disp_est, disp_gt, mask) for disp_est in disp_ests]
-        scalar_outputs["D1"] = [D1_metric(disp_est, disp_gt, mask) for disp_est in disp_ests]
-        scalar_outputs["Thres1"] = [Thres_metric(disp_est, disp_gt, mask, 1.0) for disp_est in disp_ests]
-        scalar_outputs["Thres2"] = [Thres_metric(disp_est, disp_gt, mask, 2.0) for disp_est in disp_ests]
-        scalar_outputs["Thres3"] = [Thres_metric(disp_est, disp_gt, mask, 3.0) for disp_est in disp_ests]
-        return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
-    else:
+        if verbose:
+            print(f"    shape before : {imgR.shape}")
+        imgL, imgR = pad(imgL, padding_left, fill=0, padding_mode='edge'), pad(imgR, padding_right, fill=0,
+                                                                               padding_mode='edge')
+        if verbose:
+            print(f"    shape after : {imgR.shape}")
+        imgL, imgR = imgL.cuda(), imgR.cuda()
+        disp_ests = torch.squeeze(model(imgL, imgR)[0])
         imgL, imgR = torch.permute(torch.squeeze(imgL), (1, 2, 0)).cpu().detach(), torch.permute(torch.squeeze(imgR), (
-        1, 2, 0)).cpu().detach()
-        if 0 not in padding_left and 0 not in padding_right:
-            imgL, imgR = np.array(imgL, dtype=np.float)[padding_left[1]:-padding_left[3],
-                         padding_left[0]:-padding_left[2]], \
-                         np.array(imgR, dtype=np.float)[padding_right[1]:-padding_right[3],
-                         padding_right[0]:-padding_right[2]]
-            disp_ests = np.array(disp_ests.cpu().detach(), dtype=np.float)[padding_right[1]:-padding_right[3],
-                       padding_right[0]:-padding_right[2]]
-        else:
-            imgL, imgR = np.array(imgL, dtype=np.float), np.array(imgR, dtype=np.float)
-            disp_ests = np.array(disp_ests.cpu().detach(), dtype=np.float)
+            1, 2, 0)).cpu().detach()
+        disp_ests = np.array(disp_ests.cpu().detach(), dtype=np.float)
+        imgL = np.array(imgL, dtype=np.float)
+        imgR = np.array(imgR, dtype=np.float)
+        if padding_right[0] > 0:
+            disp_ests = disp_ests[:, padding_right[0]:]
+            imgR = imgR[:, padding_right[0]:]
+        if padding_right[1] > 0:
+            disp_ests = disp_ests[padding_right[1]:, :]
+            imgR = imgR[padding_right[1]:, :]
+        if padding_right[2] > 0:
+            disp_ests = disp_ests[:, :-padding_right[2]]
+            imgR = imgR[:, :-padding_right[2]]
+        if padding_right[3] > 0:
+            disp_ests = disp_ests[:-padding_right[3], :]
+            imgR = imgR[:-padding_right[3], :]
+
+        if padding_left[0] > 0:
+            imgL = imgL[:, padding_left[0]:]
+        if padding_left[1] > 0:
+            imgL = imgL[padding_left[1]:, :]
+        if padding_left[2] > 0:
+            imgL = imgL[:, :-padding_left[2]]
+        if padding_left[3] > 0:
+            imgL = imgL[:-padding_left[3], :]
         if sample['imgL'].shape[0] > 480:
-            disp_ests, imgL, imgR = cv2.pyrUp(disp_ests)*2, cv2.pyrUp(imgL), cv2.pyrUp(imgR)
+            imgL = cv2.pyrUp(imgL)
+            disp_ests = cv2.pyrUp(disp_ests) * 2
+        if sample['imgR'].shape[0] > 480:
+            imgR = cv2.pyrUp(imgR)
+            if disp_ests.shape[0] < 480:
+                disp_ests = cv2.pyrUp(disp_ests) * 2
         image_outputs = {"disp_est": disp_ests, "imgL": imgL, "imgR": imgR}
         return image_outputs
+
+    @data_superloader(time_of_day, im_type, threshold, clean=clean, path_save=path_save, colormap=colormap)
+    def multiple_inference(sample, model):
+        if sample['imgR'].shape[0] > 480:
+            imgR = cv2.pyrDown(sample['imgR'])
+        else:
+            imgR = sample['imgR'].copy()
+        if sample['imgL'].shape[0] > 480:
+            imgL = cv2.pyrDown(sample['imgL'])
+        else:
+            imgL = sample['imgL'].copy()
+        if len(imgR.shape) == 2:
+            imgR = np.stack([imgR, imgR, imgR], axis=2)
+        if len(imgL.shape) == 2:
+            imgL = np.stack([imgL, imgL, imgL], axis=2)
+        imgL, imgR = torch.cuda.FloatTensor(imgL), torch.cuda.FloatTensor(imgR)
+        imgL = torch.permute(imgL[None, :, :, :], (0, 3, 1, 2))
+        imgR = torch.permute(imgR[None, :, :, :], (0, 3, 1, 2))
+        padding_left = padding(imgL)
+        padding_right = padding(imgR)
+        imgL, imgR = pad(imgL, padding_left, fill=0, padding_mode='edge'), pad(imgR, padding_right, fill=0,
+                                                                               padding_mode='edge')
+        imgL, imgR = imgL.cuda(), imgR.cuda()
+        disp_ests = torch.squeeze(model(imgL, imgR)[0])
+        disp_ests = np.array(disp_ests.cpu().detach(), dtype=np.float)
+        if padding_right[0] > 0:
+            disp_ests = disp_ests[:, padding_right[0]:]
+        if padding_right[1] > 0:
+            disp_ests = disp_ests[padding_right[1]:, :]
+        if padding_right[2] > 0:
+            disp_ests = disp_ests[:, :-padding_right[2]]
+        if padding_right[3] > 0:
+            disp_ests = disp_ests[:-padding_right[3], :]
+        return disp_ests
+
+    model.eval()
+    if not(sample is None):
+        image_outputs = simple_inference(sample, model)
+        return image_outputs
+    else:
+        multiple_inference(sample, model)
+    # if compute_metrics:
+    #     imgL, imgR, disp_gt = sample['imgL'], sample['imgR'], sample['disparity']
+    #     disp_gt = disp_gt.cuda()
+    #     mask = (disp_gt < max_disp) & (disp_gt > 0)
+    #     disp_gts = [disp_gt, disp_gt, disp_gt, disp_gt, disp_gt, disp_gt]
+    # else:
 
 
 def padding(image):
     m, n = image.shape[-2:]
+    if m == 480 or m == 960:
+        pad_h = 0
+    if m < 960:
+        pad_h = (960 - m) / 2
     if m < 480:
         pad_h = (480 - m) / 2
-    elif m < 960:
-        pad_h = (960 - m) / 2
-    else:
-        pad_h = 0
+
     l_pad = pad_h if pad_h % 1 == 0 else pad_h + 0.5
     r_pad = pad_h if pad_h % 1 == 0 else pad_h - 0.5
+    if n == 1280 or n == 640:
+        pad_v = 0
+    if n < 1280:
+        pad_v = (1280 - n) / 2
     if n < 640:
         pad_v = (640 - n) / 2
-    elif n < 1280:
-        pad_v = (1280 - n) / 2
-    else:
-        pad_v = 0
     t_pad = pad_v if pad_v % 1 == 0 else pad_v + 0.5
     b_pad = pad_v if pad_v % 1 == 0 else pad_v - 0.5
     padding_final = [int(t_pad), int(l_pad), int(b_pad), int(r_pad)]
     # print(padding_final)
     return padding_final
+

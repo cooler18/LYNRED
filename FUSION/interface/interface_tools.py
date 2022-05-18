@@ -1,5 +1,8 @@
+import pickle
 import tkinter as tk
 from tkinter.filedialog import *
+
+import numpy as np
 from PIL import ImageTk, Image
 import PIL
 import random
@@ -7,6 +10,8 @@ from os.path import *
 import skimage.io as io
 import cv2 as cv
 import os
+
+from FUSION.script.image_management import name_generator
 
 
 def prepare_image(image, size=(640, 480), master=None):
@@ -26,21 +31,24 @@ def highlight(widget):
 
 
 def random_image_opening(verbose=1):
-    p = dirname(abspath('FUSION'))
-    pathrgb = p + "/../Images_grouped/visible"
-    pathgray = p + "/../Images_grouped/infrared"
-    pathfus = p + "/../Images_grouped/multispectral"
+    p = dirname(dirname(dirname(abspath(__file__))))
     random.seed()
+    n = random.randint(0, 1)
+    if n:
+        Time = 'Day'
+    else:
+        Time = 'Night'
+    pathrgb = join(p, "LynredDataset", Time, 'hybrid', 'right')
+    pathgray = join(p, "LynredDataset", Time, 'hybrid', 'infrared_projected')
+    pathdisparity = join(p, "LynredDataset", Time, 'hybrid', 'disparity_maps')
+    pathgray_origin = join(p, "LynredDataset", Time, 'hybrid', 'left')
     n = random.randint(0, len(os.listdir(pathrgb)) - 1)
-    ext_rgb = search_ext(pathrgb, n)
-    ext_ir = search_ext(pathgray, n)
-    ext_fus = search_ext(pathfus, n)
-    imageRGB_name = pathrgb + "/VIS_" + str(n) + ext_rgb
-    imageIR_name = pathgray + "/IFR_" + str(n) + ext_ir
-    imageFUS_name = pathfus + "/MUL_" + str(n) + ext_fus
-    if verbose:
-        print(f"Image number : {n}")
-    return imageRGB_name, imageIR_name, imageFUS_name
+    imageRGB_name = join(pathrgb, 'right' + name_generator(n) + '.png')
+    imageIR_name = join(pathgray, 'left' + name_generator(n) + '.png')
+    with open(pathdisparity) as f:
+        disparity = np.array(pickle.load(f))
+
+    return imageRGB_name, imageIR_name, disparity, pathgray_origin
 
 
 def search_number(path):

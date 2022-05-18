@@ -1,16 +1,212 @@
-import argparse
+import os
+import pathlib
 import pickle
-import time
 from os.path import join
-
 import cv2 as cv
 import timeit
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage import median_filter
-from skimage.morphology import area_closing, closing, square, cube, disk, ball
-from skimage.metrics import structural_similarity as ssim
-from skimage.metrics import mean_squared_error, normalized_mutual_information
+
+
+def automatic_registration(imL, imR, matrix, path_save, nameL ="left_rect.png", nameR="right_rect.png", save=True):
+    warp_matrix_rotation, warp_matrix_translation = matrix["matrix_rotation"], matrix["matrix_translation"]
+    CutY, CutZ = matrix["CutY"], matrix["CutZ"]
+    m, n = imL.shape[:2]
+    imL_aligned = cv.warpPerspective(imL.copy(), warp_matrix_rotation, (n, m),
+                                     flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+    imL_aligned = cv.warpAffine(imL_aligned, warp_matrix_translation, (n, m),
+                                flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+    imR_aligned = imR.copy()
+    if CutZ >= 0:
+        if CutY >= 0:
+            imR_aligned, imL_aligned = imR_aligned[CutZ:, CutY:], imL_aligned[CutZ:, CutY:]
+
+        else:
+            imR_aligned, imL_aligned = imR_aligned[CutZ:, :CutY], imL_aligned[CutZ:, :CutY]
+    else:
+        if CutY >= 0:
+            imR_aligned, imL_aligned = imR_aligned[:CutZ, CutY:], imL_aligned[:CutZ, CutY:]
+        else:
+            imR_aligned, imL_aligned = imR_aligned[:CutZ, :CutY], imL_aligned[:CutZ, :CutY]
+    if save:
+        if os.path.basename(os.path.dirname(os.path.dirname(path_save))) == "Video_frame":
+            if imL_aligned.shape[1] > 640:
+                imL_aligned = cv.pyrDown(imL_aligned)
+            if imR_aligned.shape[1] > 640:
+                imR_aligned = cv.pyrDown(imR_aligned)
+        if len(imL_aligned.shape) > 2:
+            cv.imwrite(path_save + '/left/' + nameL, cv.cvtColor(imL_aligned, cv.COLOR_RGB2BGR))
+        else:
+            cv.imwrite(path_save + '/left/' + nameL, imL_aligned)
+
+        if len(imR_aligned.shape) > 2:
+            cv.imwrite(path_save + '/right/' + nameR, cv.cvtColor(imR_aligned, cv.COLOR_RGB2BGR))
+        else:
+            cv.imwrite(path_save + '/right/' + nameR, imR_aligned)
+    else:
+
+        return imL_aligned, imR_aligned
+
+
+def manual_registration(imL, imR, path_save):
+    from Stereo_matching.NeuralNetwork.ACVNet_main.ACVNet_main import test_sample
+    from Stereo_matching.NeuralNetwork.ACVNet_main.ACVNet_test import initialize_model
+    model = initialize_model(verbose=False)
+
+    def nothing(x):
+        pass
+    try:
+        with open(join(path_save, "transform_matrix"), "rb") as p:
+            matrix = pickle.load(p)
+        warp_matrix_rotation = matrix["matrix_rotation"]
+        warp_matrix_rotation = cv.Rodrigues(warp_matrix_rotation)
+        Rx, Rz, Ry = warp_matrix_rotation[0]
+        warp_matrix_translation = matrix["matrix_translation"]
+        Tx, Ty, Tz = int((warp_matrix_translation[0, 0] - 0.5) * 500), warp_matrix_translation[0, 2], warp_matrix_translation[1, 2]
+        CutY = matrix["CutY"]
+        CutZ = matrix["CutZ"]
+        with open(join(path_save, "transform_matrix_old"), "wb") as p:
+            pickle.dump(matrix, p)
+    except FileNotFoundError:
+        print('No disparity matrix found')
+        Rx, Rz, Ry = 0, 0, 0
+        Tx, Ty, Tz = 250, 0, 0
+        CutY = 0
+        CutZ = 0
+    m, n = imL.shape[:2]
+    cv.namedWindow('Fusion', cv.WINDOW_NORMAL)
+    cv.resizeWindow('Fusion', n, m)
+    cv.createTrackbar('Rotation Z', 'Fusion', int(Rz*10**6 + 250), 500, nothing)
+    cv.createTrackbar('Rotation X', 'Fusion', int(Rx*10**6 + 250), 500, nothing)
+    cv.createTrackbar('Rotation Y', 'Fusion', int(Ry*10**4 + 250), 500, nothing)
+    cv.createTrackbar('Translation Z', 'Fusion', int(Tz + 250), 500, nothing)
+    cv.createTrackbar('Translation Y', 'Fusion',  int(Ty + 250), 500, nothing)
+    cv.createTrackbar('Translation X', 'Fusion', Tx, 500, nothing)
+    cv.createTrackbar('Cut Z', 'Fusion', CutZ + 250, 500, nothing)
+    cv.createTrackbar('Cut Y', 'Fusion', CutY + 250, 500, nothing)
+    while True:
+        # Updating the parameters based on the trackbar positions
+        Rz = (cv.getTrackbarPos('Rotation Z', 'Fusion') - 250)/10**6
+        Rx = (cv.getTrackbarPos('Rotation X', 'Fusion') - 250)/10**6
+        Ry = (cv.getTrackbarPos('Rotation Y', 'Fusion') - 250)/10**4
+        Tz = cv.getTrackbarPos('Translation Z', 'Fusion') - 250
+        Ty = cv.getTrackbarPos('Translation Y', 'Fusion') - 250
+        Tx = cv.getTrackbarPos('Translation X', 'Fusion')/500 + 0.5
+        CutY = cv.getTrackbarPos('Cut Y', 'Fusion') - 250
+        CutZ = cv.getTrackbarPos('Cut Z', 'Fusion') - 250
+        warp_matrix_rotation, _ = cv.Rodrigues(np.array([Rx, Rz, Ry]))
+        warp_matrix_translation = np.array([[Tx, 0., Ty/1.], [0., Tx, Tz/1.]])
+        imL_aligned = cv.warpPerspective(imL.copy(), warp_matrix_rotation, (n, m), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+        imL_aligned = cv.warpAffine(imL_aligned, warp_matrix_translation, (n, m), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+        imR_aligned = imR.copy()
+        if CutZ >= 0:
+            if CutY >= 0:
+                imR_aligned, imL_aligned = imR_aligned[CutZ:, CutY:], imL_aligned[CutZ:, CutY:]
+
+            else:
+                imR_aligned, imL_aligned = imR_aligned[CutZ:, :CutY], imL_aligned[CutZ:, :CutY]
+        else:
+            if CutY >= 0:
+                imR_aligned, imL_aligned = imR_aligned[:CutZ, CutY:], imL_aligned[:CutZ, CutY:]
+            else:
+                imR_aligned, imL_aligned = imR_aligned[:CutZ, :CutY], imL_aligned[:CutZ, :CutY]
+        sample = {
+            'imgL': imL_aligned/255,
+            'imgR': imR_aligned/255
+        }
+        image_outputs = test_sample(sample, model)
+        disparity = image_outputs["disp_est"]
+        if m > 480:
+            disparity = disparity / 140
+        else:
+            disparity = disparity / 70
+        final = np.uint8((imR_aligned / 2 + imL_aligned / 2))
+        final = cv.resize(final, (disparity.shape[1], disparity.shape[0]))
+        final = np.hstack([cv.cvtColor(final, cv.COLOR_RGB2BGR) / 255, np.stack([disparity, disparity, disparity], axis=2)])
+        cv.imshow("Fusion", final)
+        if cv.waitKey(1) == 27:
+            break
+    cv.destroyAllWindows()
+    cv.namedWindow('Fusion', cv.WINDOW_NORMAL)
+    cv.resizeWindow('Fusion', n, m)
+    Rz_ = Rz
+    Rx_ = Rx
+    Ry_ = Ry
+    Tz_ = Tz
+    Ty_ = Ty
+    Tx_ = Tx
+    CutY_ = CutY
+    CutZ_ = CutZ
+    cv.createTrackbar('Rotation Z', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Rotation X', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Rotation Y', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Translation Z', 'Fusion', 20, 40, nothing)
+    cv.createTrackbar('Translation Y', 'Fusion', 20, 40, nothing)
+    cv.createTrackbar('Translation X', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Cut Z', 'Fusion', 250, 500, nothing)
+    cv.createTrackbar('Cut Y', 'Fusion', 250, 500, nothing)
+    while True:
+        # Updating the parameters based on the trackbar positions
+        Rz = (cv.getTrackbarPos('Rotation Z', 'Fusion') - 250) / 10 ** 7
+        Rx = (cv.getTrackbarPos('Rotation X', 'Fusion') - 250) / 10 ** 7
+        Ry = (cv.getTrackbarPos('Rotation Y', 'Fusion') - 250) / 10 ** 5
+        Tz = cv.getTrackbarPos('Translation Z', 'Fusion') - 20
+        Ty = cv.getTrackbarPos('Translation Y', 'Fusion') - 20
+        Tx = (cv.getTrackbarPos('Translation X', 'Fusion')-250) / 1000
+        CutY = cv.getTrackbarPos('Cut Y', 'Fusion') - 250
+        CutZ = cv.getTrackbarPos('Cut Z', 'Fusion') - 250
+        warp_matrix_rotation, _ = cv.Rodrigues(np.array([Rx+Rx_, Rz+Rz_, Ry+Ry_]))
+        warp_matrix_translation = np.array([[Tx+Tx_, 0., Ty+Ty_ / 1.], [0., Tx+Tx_, Tz+Tz_ / 1.]])
+        imL_aligned = cv.warpPerspective(imL.copy(), warp_matrix_rotation, (n, m),
+                                         flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+        imL_aligned = cv.warpAffine(imL_aligned, warp_matrix_translation, (n, m),
+                                    flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
+        imR_aligned = imR.copy()
+        CutZ += CutZ_
+        CutY += CutY_
+        if CutZ >= 0:
+            if CutY >= 0:
+                imR_aligned, imL_aligned = imR_aligned[CutZ:, CutY:], imL_aligned[CutZ:, CutY:]
+
+            else:
+                imR_aligned, imL_aligned = imR_aligned[CutZ:, :CutY], imL_aligned[CutZ:, :CutY]
+        else:
+            if CutY >= 0:
+                imR_aligned, imL_aligned = imR_aligned[:CutZ, CutY:], imL_aligned[:CutZ, CutY:]
+            else:
+                imR_aligned, imL_aligned = imR_aligned[:CutZ, :CutY], imL_aligned[:CutZ, :CutY]
+        sample = {
+            'imgL': imL_aligned / 255,
+            'imgR': imR_aligned / 255
+        }
+        image_outputs = test_sample(sample, model)
+        disparity = image_outputs["disp_est"]
+        if m > 480:
+            disparity = disparity / 140
+        else:
+            disparity = disparity / 70
+        final = np.uint8((imR_aligned / 2 + imL_aligned / 2))
+        final = cv.resize(final, (disparity.shape[1], disparity.shape[0]))
+        final = np.hstack(
+            [cv.cvtColor(final, cv.COLOR_RGB2BGR) / 255, np.stack([disparity, disparity, disparity], axis=2)])
+        cv.imshow("Fusion", final)
+        if cv.waitKey(1) == 27:
+            break
+    if len(imL.shape) > 2:
+        cv.imwrite(path_save + '/left_rect.png', cv.cvtColor(imL_aligned, cv.COLOR_RGB2BGR))
+    else:
+        cv.imwrite(path_save + '/left_rect.png', imL_aligned)
+    if len(imR.shape) > 2:
+        cv.imwrite(path_save + '/right_rect.png', cv.cvtColor(imR_aligned, cv.COLOR_RGB2BGR))
+    else:
+        cv.imwrite(path_save + '/right_rect.png', cv.cvtColor(imR_aligned, cv.COLOR_RGB2BGR))
+    with open(join(path_save, "transform_matrix"), "wb") as p:
+        pickle.dump({"matrix_rotation": warp_matrix_rotation,
+                     "matrix_translation": warp_matrix_translation,
+                     "CutY": CutY,
+                     "CutZ": CutZ}, p)
+    cv.destroyAllWindows()
+    return warp_matrix_rotation, warp_matrix_translation, CutY, CutZ
 
 
 def SIFT(image_dst, image_src, MIN_MATCH_COUNT=4, matcher='FLANN', name='00', lowe_ratio=0,
@@ -117,129 +313,3 @@ def init_matcher(method='SIFT', matcher='FLANN', trees=5):
         flann_params = dict(algorithm=FLANN_INDEX_LINEAR)
         matcher = cv.FlannBasedMatcher(flann_params, {})
     return matcher
-
-
-def automatic_registration(imL, imR, matrix, nameL ="left_rect.png", nameR="right_rect.png"):
-    warp_matrix_rotation, warp_matrix_translation = matrix["matrix_rotation"], matrix["matrix_translation"]
-    CutY, CutZ = matrix["CutY"], matrix["CutZ"]
-    m, n = imL.shape[:2]
-    imL_aligned = cv.warpPerspective(imL.copy(), warp_matrix_rotation, (n, m),
-                                     flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
-    imL_aligned = cv.warpAffine(imL_aligned, warp_matrix_translation, (n, m),
-                                flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
-    imR_aligned = imR.copy()
-    if CutZ >= 0:
-        if CutY >= 0:
-            imR_aligned, imL_aligned = imR_aligned[CutZ:, CutY:], imL_aligned[CutZ:, CutY:]
-
-        else:
-            imR_aligned, imL_aligned = imR_aligned[CutZ:, :CutY], imL_aligned[CutZ:, :CutY]
-    else:
-        if CutY >= 0:
-            imR_aligned, imL_aligned = imR_aligned[:CutZ, CutY:], imL_aligned[:CutZ, CutY:]
-        else:
-            imR_aligned, imL_aligned = imR_aligned[:CutZ, :CutY], imL_aligned[:CutZ, :CutY]
-    p = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day"
-    cv.imwrite(p + '/left/' + nameL, cv.cvtColor(imL_aligned, cv.COLOR_RGB2BGR))
-    cv.imwrite(p + '/right/' + nameR, cv.cvtColor(imR_aligned, cv.COLOR_RGB2BGR))
-
-
-def manual_registration(imL, imR):
-    def nothing(x):
-        pass
-    cv.namedWindow('Fusion', cv.WINDOW_NORMAL)
-    m, n = imL.shape[:2]
-    cv.resizeWindow('Fusion', n, m)
-    cv.createTrackbar('Rotation Z', 'Fusion', 250, 500, nothing)
-    cv.createTrackbar('Rotation X', 'Fusion', 250, 500, nothing)
-    cv.createTrackbar('Rotation Y', 'Fusion', 250, 500, nothing)
-    cv.createTrackbar('Translation Z', 'Fusion', 250, 500, nothing)
-    cv.createTrackbar('Translation Y', 'Fusion', 250, 500, nothing)
-    cv.createTrackbar('Translation X', 'Fusion', 250, 500, nothing)
-    cv.createTrackbar('Cut Z', 'Fusion', 250, 500, nothing)
-    cv.createTrackbar('Cut Y', 'Fusion', 250, 500, nothing)
-    while True:
-        # Updating the parameters based on the trackbar positions
-        Rz = (cv.getTrackbarPos('Rotation Z', 'Fusion') - 250)/10**6
-        Rx = (cv.getTrackbarPos('Rotation X', 'Fusion') - 250)/10**6
-        Ry = (cv.getTrackbarPos('Rotation Y', 'Fusion') - 250)/10**4
-        Tz = cv.getTrackbarPos('Translation Z', 'Fusion') - 250
-        Ty = cv.getTrackbarPos('Translation Y', 'Fusion') - 250
-        Tx = cv.getTrackbarPos('Translation X', 'Fusion')/500 + 0.5
-        CutY = cv.getTrackbarPos('Cut Y', 'Fusion') - 250
-        CutZ = cv.getTrackbarPos('Cut Z', 'Fusion') - 250
-        warp_matrix_rotation, _ = cv.Rodrigues(np.array([Rx, Rz, Ry]))
-        warp_matrix_translation = np.array([[Tx, 0., Ty/1.], [0., Tx, Tz/1.]])
-        imL_aligned = cv.warpPerspective(imL.copy(), warp_matrix_rotation, (n, m), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
-        imL_aligned = cv.warpAffine(imL_aligned, warp_matrix_translation, (n, m), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
-        imR_aligned = imR.copy()
-        if CutZ >= 0:
-            if CutY >= 0:
-                imR_aligned, imL_aligned = imR_aligned[CutZ:, CutY:], imL_aligned[CutZ:, CutY:]
-
-            else:
-                imR_aligned, imL_aligned = imR_aligned[CutZ:, :CutY], imL_aligned[CutZ:, :CutY]
-        else:
-            if CutY >= 0:
-                imR_aligned, imL_aligned = imR_aligned[:CutZ, CutY:], imL_aligned[:CutZ, CutY:]
-            else:
-                imR_aligned, imL_aligned = imR_aligned[:CutZ, :CutY], imL_aligned[:CutZ, :CutY]
-        final = np.uint8((imR_aligned / 2 + imL_aligned / 2))
-        cv.imshow("Fusion", cv.cvtColor(final, cv.COLOR_RGB2BGR)/255)
-        if cv.waitKey(1) == 27:
-            break
-    p = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day"
-    cv.imwrite(p + '/left/left_rect.png', cv.cvtColor(imL_aligned, cv.COLOR_RGB2BGR))
-    cv.imwrite(p + '/right/right_rect.png', cv.cvtColor(imR_aligned, cv.COLOR_RGB2BGR))
-    with open(join(p, "Calibration", "transform_matrix_slaveToMaster_vis"), "wb") as p:
-        pickle.dump({"matrix_rotation": warp_matrix_rotation,
-                     "matrix_translation": warp_matrix_translation,
-                     "CutY": CutY,
-                     "CutZ": CutZ}, p)
-    cv.destroyAllWindows()
-    return warp_matrix_rotation, warp_matrix_translation, CutY, CutZ
-
-
-def image_registration(im1, im2, warp_mode):
-
-    # Convert images to grayscale
-    im1_gray = im1.GRAYSCALE()
-    im2_gray = im2.GRAYSCALE()
-
-    # Find size of image1
-    sz = im1.shape
-
-    # Define 2x3 or 3x3 matrices and initialize the matrix to identity
-    if warp_mode == cv.MOTION_HOMOGRAPHY:
-        warp_matrix = np.eye(3, 3, dtype=np.float32)
-    else:
-        warp_matrix = np.eye(2, 3, dtype=np.float32)
-
-    # Specify the number of iterations.
-    number_of_iterations = 100
-
-    # Specify the threshold of the increment
-    # in the correlation coefficient between two iterations
-    termination_eps = 1e-10
-
-    # Define termination criteria
-    criteria = (cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
-
-    # Run the ECC algorithm. The results are stored in warp_matrix.
-    (cc, warp_matrix) = cv.findTransformECC(im1_gray, im2_gray, warp_matrix, warp_mode, criteria, None, 3)
-    print(warp_matrix)
-    if warp_mode == cv.MOTION_HOMOGRAPHY:
-    # Use warpPerspective for Homography
-        im2_aligned = cv.warpPerspective(im2, warp_matrix, (sz[1], sz[0]), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
-    else:
-    # Use warpAffine for Translation, Euclidean and Affine
-        im2_aligned = cv.warpAffine(im2, warp_matrix, (sz[1], sz[0]), flags=cv.INTER_LINEAR + cv.WARP_INVERSE_MAP)
-
-    # Show final results
-    cv.imshow("Image 1", im1.BGR())
-    cv.imshow("Image 2", im2.BGR())
-    cv.imshow("Aligned Image 2", (im2_aligned/2 + im1/2)/255)
-    cv.waitKey(0)
-    cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/left/left_rect.png', im1.BGR())
-    cv.imwrite('/home/godeta/PycharmProjects/LYNRED/LynredDataset/visible/Day/right/right_rect.png', cv.cvtColor(im2_aligned, cv.COLOR_RGB2BGR))
-    cv.destroyAllWindows()

@@ -1,7 +1,8 @@
 import tkinter as tk
 from FUSION.interface.Application import Application
 from FUSION.interface.Application import Application
-
+import pathlib
+pathlib.Path(__file__).parent.resolve()
 # def main(tk.Tk):
 #     ############################################################################
 #     # definition of the window

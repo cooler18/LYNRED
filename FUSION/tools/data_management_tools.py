@@ -134,7 +134,7 @@ def register_cmap(cmap, name):
 
 def open_image():
     p = dirname(abspath('.'))
-    filename = askopenfilename(title="Open an image", filetypes=[('jpg files', '.jpg'), ('png files', '.png'),
+    filename = askopenfilename(title="Open an image", filetypes=[('png files', '.png'), ('jpg files', '.jpg'),
                                                                  ('all files', '.*')],
                                initialdir=join(p, 'Images_grouped', 'visible'))
     num = search_number(filename)
@@ -155,13 +155,13 @@ def open_image_random():
 def open_image_manually():
     p = dirname(abspath('.'))
     filename_vis = askopenfilename(title="Open an image Visible",
-                                   filetypes=[('jpg files', '.jpg'), ('png files', '.png'),
+                                   filetypes=[('png files', '.png'), ('jpg files', '.jpg'),
                                               ('all files', '.*')],
-                                   initialdir=join(p, 'Images_grouped', 'visible'))
+                                   initialdir='/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/hybrid/right')
     filename_ir = askopenfilename(title="Open an image Infrared",
-                                  filetypes=[('tiff files', '.tiff'), ('png files', '.png'),
+                                  filetypes=[('png files', '.png'), ('tiff files', '.tiff'),
                                              ('all files', '.*')],
-                                  initialdir=join(p, 'Images_grouped', 'infrared'))
+                                  initialdir='/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/hybrid/infrared_projected')
     VIS = ImageCustom(filename_vis)
     IR = ImageCustom(filename_ir)
     return IR, VIS

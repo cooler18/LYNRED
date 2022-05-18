@@ -1,6 +1,8 @@
+import os.path
 import pickle
-
+import pathlib
 import cv2
+import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from scipy.ndimage import median_filter
 from scipy.signal import medfilt2d
@@ -18,6 +20,7 @@ from FUSION.tools.data_management_tools import register_cmap_Lynred, register_cm
 class BaseFramework(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
+        self.path = os.path.dirname(os.path.dirname(pathlib.Path().resolve()))
         self.master.protocol("WM_DELETE_WINDOW", self._quit_app)
         self.place(x=0, y=0)
         self._specialized(master)
@@ -72,20 +75,21 @@ class BaseFramework(tk.Frame):
 
 class Application(BaseFramework):
     def __init__(self, master):
-        self._calibration = tk.BooleanVar()
+        # self._calibration = tk.BooleanVar()
         super().__init__(master)
         self._activate(None)
         self._toggleFullScreen(None)
         self.win = None
         self.IR_pipe = {}
         self.VIS_pipe = {}
-        self._orientation_loading()
-
+        # self._orientation_loading()
     # Creation of the widgets #################################################################################
+
     def _menu(self, master):
         menubar = tk.Menu(master)
         File = tk.Menu(menubar, tearoff=0)
-        File.add_command(label="Open...", command=self._open_image)
+        File.add_command(label="Open image Day...", command=lambda: self._open_image())
+        File.add_command(label="Open image Night...", command=lambda: self._open_image(False))
         File.add_command(label="Open random...", command=self._open_image_random)
         File.add_command(label="Open manually...", command=self._open_image_manually)
         File.add_command(label="Save...", command=self._alert)
@@ -98,15 +102,13 @@ class Application(BaseFramework):
         Fusion.add_command(label="simple Luminance fusion", command=self._luminance_fusion_panel)
         Fusion.add_command(label="Gradient map fusion", command=self._gradient_map_fusion)
         menubar.add_cascade(label="Fusion", menu=Fusion)
-
-        Calibration = tk.Menu(menubar, tearoff=0)
-        Calibration.add_command(label='Orientation Estimation', command=lambda: self._orientation_calibration(one=True))
-        Calibration.add_command(label='Orientation Estimation (10 images)', command=self._orientation_calibration)
-        Calibration.add_command(label='Manual Calibration', command=self._manual_calibration)
-        Calibration.add_separator()
-        Calibration.add_command(label='Toggle Calibration', command=self._toggleCalibration)
-        menubar.add_cascade(label="Calibration", menu=Calibration)
-
+        # Calibration = tk.Menu(menubar, tearoff=0)
+        # Calibration.add_command(label='Orientation Estimation', command=lambda: self._orientation_calibration(one=True))
+        # Calibration.add_command(label='Orientation Estimation (10 images)', command=self._orientation_calibration)
+        # Calibration.add_command(label='Manual Calibration', command=self._manual_calibration)
+        # Calibration.add_separator()
+        # Calibration.add_command(label='Toggle Calibration', command=self._toggleCalibration)
+        # menubar.add_cascade(label="Calibration", menu=Calibration)
         Display = tk.Menu(menubar, tearoff=0)
         Display.add_command(label="Toggle Fullscreen", command=self._toggleFullScreen)
         Display.add_command(label='Reset Selection to original', command=self._reset_selection)
@@ -126,7 +128,7 @@ class Application(BaseFramework):
         self.image_process.set(0)
 
         menubar.add_command(label='Image Processing Tool...', command=self._image_processing_tools)
-        menubar.add_command(label='Depth Mapping...', command=self._depth_map_Window)
+        menubar.add_command(label='Parallax correction...', command=self._depth_map_Window)
 
         master.configure(menu=menubar)
 
@@ -158,50 +160,52 @@ class Application(BaseFramework):
         self._canvas_VIS.pack()
         self._canvas_FUS.pack()
 
-        vis, ir, fus = random_image_opening()
+        vis, ir, self.disparity, ir_origin = random_image_opening()
         self.VIS = ImageCustom(vis)
         self.IR = ImageCustom(ir)
         self.IR_origin, self.VIS_origin = size_matcher(self.IR, self.VIS)
         self.IR_current_value, self.VIS_current_value = self.IR_origin.copy(), self.VIS_origin.copy()
-        self.FUS = ImageCustom(fus)
-        self._calibrate()
+        # self._calibrate()
+        self.FUS = np.zeros([1, 1])
         self._vis = prepare_image(self.VIS)
+        self._ir = prepare_image(self.IR)
         self._fus = prepare_image(self.FUS, size=(1280, 960))
+        self._canvas_IR.create_image(328, 248, image=self._ir)
         self._canvas_VIS.create_image(328, 248, image=self._vis)
         self._canvas_FUS.create_image(650, 490, image=self._fus)
 
-    def _orientation_loading(self):
-        p = join(abspath(dirname('tools')), 'tools', 'calibration_selection')
-        try:
-            if os.stat(join(p, 'angle_calibration')).st_size > 0:
-                with open(join(p, 'angle_calibration'), "rb") as f:
-                    self.angle = pickle.load(f)
-                with open(join(p, 'length_calibration'), "rb") as f:
-                    self.gap = pickle.load(f)
-            else:
-                self.angle = 0
-                self.gap = (0, 0)
-        except OSError:
-            print("There is no Calibration file here !")
-            self.angle = 0
-            self.gap = (0, 0)
+    # def _orientation_loading(self):
+    #     p = join(self.path, 'FUSION', 'tools', 'calibration_selection')
+    #     try:
+    #         if os.stat(join(p, 'angle_calibration')).st_size > 0:
+    #             with open(join(p, 'angle_calibration'), "rb") as f:
+    #                 self.angle = pickle.load(f)
+    #             with open(join(p, 'length_calibration'), "rb") as f:
+    #                 self.gap = pickle.load(f)
+    #         else:
+    #             self.angle = 0
+    #             self.gap = (0, 0)
+    #     except OSError:
+    #         # print("There is no Calibration file here !")
+    #         self.angle = 0
+    #         self.gap = (0, 0)
 
-    def _toggleCalibration(self):
-        if self._calibration.get():
-            self._calibration.set(0)
-            self.IR_current_value = self._apply_pipe(self.IR_origin, 'ir')
-            self._refresh(self.IR_current_value, 'ir')
-        else:
-            self._calibration.set(1)
-            self.IR_current_value = self._apply_pipe(self.IR_origin, 'ir')
-            self._calibrate()
-            self._refresh(self.IR_current_value, 'ir')
-        if self._current_panel == 'colormap_fusion':
-            self._colormap_change()
-        elif self._current_panel == 'gradient_map_fusion':
-            self._filter_panel()
-        elif self._current_panel == 'luminance_fusion':
-            self._domain_change()
+    # def _toggleCalibration(self):
+    #     if self._calibration.get():
+    #         self._calibration.set(0)
+    #         self.IR_current_value = self._apply_pipe(self.IR_origin, 'ir')
+    #         self._refresh(self.IR_current_value, 'ir')
+    #     else:
+    #         self._calibration.set(1)
+    #         self.IR_current_value = self._apply_pipe(self.IR_origin, 'ir')
+    #         self._calibrate()
+    #         self._refresh(self.IR_current_value, 'ir')
+    #     if self._current_panel == 'colormap_fusion':
+    #         self._colormap_change()
+    #     elif self._current_panel == 'gradient_map_fusion':
+    #         self._filter_panel()
+    #     elif self._current_panel == 'luminance_fusion':
+    #         self._domain_change()
 
     def _specialized(self, master):
         self.master.title("Image Fusion App")
@@ -223,48 +227,67 @@ class Application(BaseFramework):
     # #########################################################################################################
 
     # Image management tools ##################################################################################
-    def _open_image(self):
-        p = dirname(abspath('FUSION'))
-        filename = askopenfilename(title="Open an image", filetypes=[('jpg files', '.jpg'), ('png files', '.png'),
-                                                                     ('all files', '.*')],
-                                   initialdir=join(p, 'Images_grouped', 'visible'))
-        num = search_number(filename)
-        ext = search_ext(join(p, 'Images_grouped', 'infrared'), num)
-        filename_ir = p + "/Images_grouped/infrared/IFR_" + num + ext
+    def _open_image(self, day=True):
+        if day:
+            p = join(self.path, 'LynredDataset', 'Day', 'hybrid', 'right')
+        else:
+            p = join(self.path, 'LynredDataset', 'Night', 'hybrid', 'right')
+        filename = askopenfilename(title="Open a visible image",
+                                   filetypes=[('png files', '.png'), ('jpg files', '.jpg'),
+                                              ('all files', '.*')], initialdir=p)
+        folder_name = dirname(filename)
+        # num = search_number(filename)
+        # num = sorted(os.listdir(folder_name)).index(basename(filename))
+        if basename(dirname(folder_name)) == 'hybrid':
+            if basename(folder_name) == 'right':
+                other = 'infrared_projected'
+            else:
+                raise NameError("""you didn't choose a visible image""")
+
+        else:
+            raise NameError("""Choose a hybrid couple""")
+        # ext = search_ext(join(p, 'Images_grouped', 'infrared'), num)
+        filename_ir = join(dirname(folder_name), other, 'left' + basename(filename)[5:])
         self.VIS = ImageCustom(filename)
         self._vis = prepare_image(self.VIS)
         self.IR = ImageCustom(filename_ir)
+        self._ir = prepare_image(self.IR)
         self.IR_origin, self.VIS_origin = size_matcher(self.IR, self.VIS)
         self.IR_current_value, self.VIS_current_value = self.IR_origin.copy(), self.VIS_origin.copy()
-        self._calibrate()
+        # self._calibrate()
+        self._canvas_IR.create_image(328, 248, image=self._ir)
         self._canvas_VIS.create_image(328, 248, image=self._vis)
 
     def _open_image_random(self):
-        vis, ir, fus = random_image_opening()
+        vis, ir, self.disparity, ir_origin = random_image_opening()
         self.VIS = ImageCustom(vis)
         self._vis = prepare_image(self.VIS)
         self.IR = ImageCustom(ir)
+        self._ir = prepare_image(self.IR)
         self.IR_origin, self.VIS_origin = size_matcher(self.IR, self.VIS)
         self.IR_current_value, self.VIS_current_value = self.IR_origin.copy(), self.VIS_origin.copy()
-        self._calibrate()
+        # self._calibrate()
+        self._canvas_IR.create_image(328, 248, image=self._ir)
         self._canvas_VIS.create_image(328, 248, image=self._vis)
 
     def _open_image_manually(self):
-        p = dirname(abspath('FUSION'))
+        p = join(self.path, 'LynredDataset')
         filename_vis = askopenfilename(title="Open an image Visible",
-                                       filetypes=[('jpg files', '.jpg'), ('png files', '.png'),
+                                       filetypes=[('png files', '.png'), ('jpg files', '.jpg'),
                                                   ('all files', '.*')],
-                                       initialdir=join(p, 'Images_grouped', 'visible'))
+                                       initialdir= join(p, 'Day', 'hybrid', 'right'))
         filename_ir = askopenfilename(title="Open an image Infrared",
-                                      filetypes=[('tiff files', '.tiff'), ('png files', '.png'),
+                                      filetypes=[('png files', '.png'), ('tiff files', '.tiff'),
                                                  ('all files', '.*')],
-                                      initialdir=join(p, 'Images_grouped', 'infrared'))
+                                      initialdir=join(p, 'Day', 'hybrid', 'infrared_projected'))
         self.VIS = ImageCustom(filename_vis)
         self._vis = prepare_image(self.VIS)
         self.IR = ImageCustom(filename_ir)
+        self._ir = prepare_image(self.IR)
         self.IR_origin, self.VIS_origin = size_matcher(self.IR, self.VIS)
         self.IR_current_value, self.VIS_current_value = self.IR_origin.copy(), self.VIS_origin.copy()
-        self._calibrate()
+        # self._calibrate()
+        self._canvas_IR.create_image(328, 248, image=self._ir)
         self._canvas_VIS.create_image(328, 248, image=self._vis)
 
     # #########################################################################################################
@@ -287,8 +310,8 @@ class Application(BaseFramework):
             self._canvas_FUS.pack()
             self._controlPanel = tk.Frame(self._frame_fus, bg='white', height=150, width=1250)
             self._controlPanel.pack()
-            register_cmap_Lynred('D:\Travail\LYNRED\FUSION\interface\data_interface\LUT8_lifeinred_color.dat')
-            p = join(dirname(abspath('data_interface')), "interface", "data_interface")
+            register_cmap_Lynred(join(self.path, 'FUSION', 'interface', 'data_interface', 'LUT8_lifeinred_color.dat'))
+            p = join(self.path, 'FUSION', "interface", "data_interface")
             viridis, plasma, inferno, magma, cividis, life_inred = io.imread(p + "/viridis.png"), io.imread(
                 p + "/plasma.png"), \
                                                                    io.imread(p + "/inferno.png"), io.imread(
@@ -533,67 +556,67 @@ class Application(BaseFramework):
     # ########################################################################################################
 
     # Calibration tools ######################################################################################
-    def _calibrate(self):
-        p = join(abspath(dirname('tools')), 'tools', 'calibration_selection')
-        try:
-            if os.stat(join(p, 'transform_matrix_slaveToMaster_vis')).st_size > 0:
-                with open(join(p, 'transform_matrix_slaveToMaster_vis'), "rb") as f:
-                    tform = pickle.load(f)
-            else:
-                tform = np.zeros([3, 3])
-        except OSError:
-            print("There is no Transformation matrix there !")
-            tform = np.zeros([3, 3])
-        if tform.sum() == 0:
-            self.IR, self.VIS = size_matcher(self.IR, self.VIS)
-        else:
-            _, self.VIS = size_matcher(self.IR, self.VIS)
-            height, width = self.VIS.shape[:2]
-            temp = cv.warpPerspective(self.IR_current_value, tform, (width, height))
-            self.IR_current_value = ImageCustom(cv.pyrDown(temp), self.IR_origin)
-            self.IR = ImageCustom(cv.pyrDown(temp), self.IR)
-        self._calibration.set(1)
-        self._ir = prepare_image(self.IR)
-        clearImage(self._canvas_FUS)
-        self._canvas_IR.create_image(328, 248, image=self._ir)
+    # def _calibrate(self):
+    #     p = join(self.path, 'FUSION', 'tools', 'calibration_selection')
+    #     try:
+    #         if os.stat(join(p, 'transform_matrix')).st_size > 0:
+    #             with open(join(p, 'transform_matrix'), "rb") as f:
+    #                 tform = pickle.load(f)
+    #         else:
+    #             tform = np.zeros([3, 3])
+    #     except OSError:
+    #         print("There is no Transformation matrix there !")
+    #         tform = np.zeros([3, 3])
+    #     if tform.sum() == 0:
+    #         self.IR, self.VIS = size_matcher(self.IR, self.VIS)
+    #     else:
+    #         _, self.VIS = size_matcher(self.IR, self.VIS)
+    #         height, width = self.VIS.shape[:2]
+    #         temp = cv.warpPerspective(self.IR_current_value, tform, (width, height))
+    #         self.IR_current_value = ImageCustom(cv.pyrDown(temp), self.IR_origin)
+    #         self.IR = ImageCustom(cv.pyrDown(temp), self.IR)
+    #     # self._calibration.set(1)
+    #     self._ir = prepare_image(self.IR)
+    #     clearImage(self._canvas_FUS)
+    #     self._canvas_IR.create_image(328, 248, image=self._ir)
 
-    def _manual_calibration(self):
-        selection = [32, 55]  # , 204, 230, 573]
-        p = join(abspath(dirname('tools')), 'tools', 'calibration_selection')
-        pts_src = []
-        pts_dst = []
-        tform = np.zeros([3, 3])
-        for num in selection:
-            image_ir = ImageCustom(join(p, 'IFR_' + str(num) + '.tiff'))
-            image_vis = ImageCustom(join(p, 'VIS_' + str(num) + '.jpg'))
-            image_ir, image_vis = size_matcher(image_ir, image_vis)
-            if len(pts_src) == 0:
-                pts_src, pts_dst, tform_temp = manual_calibration(image_ir, image_vis)
-            else:
-                pts_src_temp, pts_dst_temp, tform_temp = manual_calibration(image_ir, image_vis)
-                np.append(pts_src, pts_src_temp, axis=0)
-                np.append(pts_dst, pts_dst_temp, axis=0)
-            tform += tform_temp
-        tform /= len(selection)
-        tform_b, status = cv.findHomography(pts_src_temp, pts_dst_temp)
-        height, width = image_vis.shape[:2]
-        choice1 = ImageCustom(cv.warpPerspective(image_ir, tform, (width, height)), image_ir)
-        choice2 = ImageCustom(cv.warpPerspective(image_ir, tform_b, (width, height)), image_ir)
-        choice1 = choice1 / 2 + image_vis.GRAYSCALE() / 2
-        choice2 = choice2 / 2 + image_vis.GRAYSCALE() / 2
-        I1 = image_vis.LAB().copy()
-        I2 = I1.copy()
-        I1[:, :, 0] = choice1
-        I2[:, :, 0] = choice2
-        choice1 = cv.cvtColor(I1, cv.COLOR_LAB2BGR)
-        choice2 = cv.cvtColor(I2, cv.COLOR_LAB2BGR)
-        choice = choose(choice1, choice2)
-        with open(join(p, "transform_matrix_slaveToMaster_vis"), "wb") as p:
-            if choice == 1:
-                pickle.dump(tform, p)
-            else:
-                pickle.dump(tform_b, p)
-        self._calibrate()
+    # def _manual_calibration(self):
+    #     selection = [32, 55]  # , 204, 230, 573]
+    #     p = join(self.path, 'FUSION', 'tools', 'calibration_selection')
+    #     pts_src = []
+    #     pts_dst = []
+    #     tform = np.zeros([3, 3])
+    #     for num in selection:
+    #         image_ir = ImageCustom(join(p, 'IFR_' + str(num) + '.tiff'))
+    #         image_vis = ImageCustom(join(p, 'VIS_' + str(num) + '.jpg'))
+    #         image_ir, image_vis = size_matcher(image_ir, image_vis)
+    #         if len(pts_src) == 0:
+    #             pts_src, pts_dst, tform_temp = manual_calibration(image_ir, image_vis)
+    #         else:
+    #             pts_src_temp, pts_dst_temp, tform_temp = manual_calibration(image_ir, image_vis)
+    #             np.append(pts_src, pts_src_temp, axis=0)
+    #             np.append(pts_dst, pts_dst_temp, axis=0)
+    #         tform += tform_temp
+    #     tform /= len(selection)
+    #     tform_b, status = cv.findHomography(pts_src_temp, pts_dst_temp)
+    #     height, width = image_vis.shape[:2]
+    #     choice1 = ImageCustom(cv.warpPerspective(image_ir, tform, (width, height)), image_ir)
+    #     choice2 = ImageCustom(cv.warpPerspective(image_ir, tform_b, (width, height)), image_ir)
+    #     choice1 = choice1 / 2 + image_vis.GRAYSCALE() / 2
+    #     choice2 = choice2 / 2 + image_vis.GRAYSCALE() / 2
+    #     I1 = image_vis.LAB().copy()
+    #     I2 = I1.copy()
+    #     I1[:, :, 0] = choice1
+    #     I2[:, :, 0] = choice2
+    #     choice1 = cv.cvtColor(I1, cv.COLOR_LAB2BGR)
+    #     choice2 = cv.cvtColor(I2, cv.COLOR_LAB2BGR)
+    #     choice = choose(choice1, choice2)
+    #     with open(join(p, "transform_matrix"), "wb") as p:
+    #         if choice == 1:
+    #             pickle.dump(tform, p)
+    #         else:
+    #             pickle.dump(tform_b, p)
+    #     self._calibrate()
 
     def _refresh(self, *args, size=(1280, 960)):
         if len(args) == 0 or len(args) == 1 or len(args) > 2:
@@ -621,19 +644,19 @@ class Application(BaseFramework):
         self.depth_map = map_distance(self.gap[0], self.gap[1], self.angle, self.IR_origin, self.VIS_origin,
                                       level=4, method='Prewitt', blur_filter=3, threshold=200)
 
-    def _orientation_calibration(self, one=False):
-        if one:
-            self.angle, self.gap, self.center, _ = orientation_calibration(method='prewitt', L=100,
-                                                                           one=one, image_IR=self.IR,
-                                                                           image_RGB=self.VIS, verbose=True)
-        else:
-            self.angle, self.gap, self.center, _ = orientation_calibration(method='prewitt', L=100, image_number=10,
-                                                                           verbose=True)
-            p = join(abspath(dirname('tools')), 'tools', 'calibration_selection')
-            with open(join(p, 'angle_calibration'), "wb") as f:
-                pickle.dump(self.angle, f)
-            with open(join(p, 'length_calibration'), "wb") as f:
-                pickle.dump(self.gap, f)
+    # def _orientation_calibration(self, one=False):
+    #     if one:
+    #         self.angle, self.gap, self.center, _ = orientation_calibration(method='prewitt', L=100,
+    #                                                                        one=one, image_IR=self.IR,
+    #                                                                        image_RGB=self.VIS, verbose=True)
+    #     else:
+    #         self.angle, self.gap, self.center, _ = orientation_calibration(method='prewitt', L=100, image_number=10,
+    #                                                                        verbose=True)
+    #         p = join(self.path, 'FUSION', 'tools', 'calibration_selection')
+    #         with open(join(p, 'angle_calibration'), "wb") as f:
+    #             pickle.dump(self.angle, f)
+    #         with open(join(p, 'length_calibration'), "wb") as f:
+    #             pickle.dump(self.gap, f)
 
     def _apply_pipe(self, image, pipe):
         if pipe == 'ir':
@@ -680,13 +703,179 @@ class Application(BaseFramework):
     def _depth_map_Window(self):
         if self.win is None:
             self.win = tk.Tk()
-            DepthMap = DepthMapWindow(self.win, self)
+            DepthMap = ParallaxCorrectionWindow(self.win, self)
             DepthMap.mainloop()
             self.win = None
         else:
             pass
     # ########################################################################################################
 
+class ParallaxCorrectionWindow(BaseFramework):
+    def __init__(self, master, main, selection):
+        self.main = main
+        self.IR = main.IR_origin.copy()
+        self.VIS = main.VIS_origin.copy()
+        self.IR_origin = self.IR.copy()
+        self.VIS_origin = self.VIS.copy()
+        self.IR_current_value = self.IR.copy()
+        self.VIS_current_value = self.VIS.copy
+        self.disparity = main.disparity
+        super().__init__(master)
+        self.select_processing.set(selection)
+        self._opening_screen()
+        self._reset_selection()
+
+    def _specialized(self, master):
+        self.master.title("Depth Map computing")
+        # Menu
+        self._menu(master)
+
+    def _menu(self, master):
+        self._select_change = tk.BooleanVar(master)
+        self._select_change.set(False)
+        self.select_processing = tk.IntVar(master)
+        menubar = tk.Menu(master)
+        File = tk.Menu(menubar, tearoff=0)
+        File.add_separator()
+        File.add_command(label="Export to main and quit", command=self._export_to_main)
+        File.add_command(label="Quit without changes", command=self._quit_app)
+        menubar.add_cascade(label="File", menu=File)
+
+        Display = tk.Menu(menubar, tearoff=0)
+        Display.add_command(label="Display source images", command=self._display)
+        menubar.add_cascade(label="Display", menu=Display)
+
+        master.configure(menu=menubar)
+
+    def _display(self):
+        if self._display_screen:
+            self._display_screen.destroy()
+            self._display_screen = None
+            self.master.geometry("1000x480")
+        else:
+            self.master.geometry("1000x880")
+            self._display_screen = tk.Frame(self.master, bg='white', width=1000, height=395, bd=0)
+            self._display_screen.place(x=0, y=485)
+            self._frame_IR = tk.LabelFrame(self._display_screen, text='Image IR', bg='white', width=496, height=395)
+            self._frame_VIS = tk.LabelFrame(self._display_screen, text='Image Visible', bg='white', width=496,
+                                            height=395)
+            self._frame_IR.place(x=2, y=0)
+            self._frame_VIS.place(x=500, y=0)
+            self._canvas_IR = tk.Canvas(self._frame_IR, width=496, height=395, background='black')
+            self._canvas_VIS = tk.Canvas(self._frame_VIS, width=496, height=395, background='black')
+            self._canvas_IR.pack()
+            self._canvas_VIS.pack()
+
+
+    def _export_to_main(self):
+        Msgbox = tk.messagebox.askquestion("Exit Image processing and export Result", "Are you sure?",
+                                           icon="warning")
+        if Msgbox == "yes":
+            if self.disparity:
+                self.main.disparity = self.disparity
+            self.quit()
+            self.master.destroy()
+        else:
+            tk.messagebox.showinfo("Return", "you will now return to application screen")
+
+    def _opening_screen(self):
+        self.master.geometry("1000x480")
+        self._frame = tk.Frame(self.master, bg='white', width=640, height=480, bd=0)
+        self._controlPanel = tk.LabelFrame(self.master, text='Control Panel', bg='white', width=260, height=480)
+        self._frame.place(x=0, y=0)
+        self._controlPanel.place(x=640, y=0)
+        self._display_screen = None
+        self._display()
+        # Set up the Canva
+        self._canvas = tk.Canvas(self._frame, width=640, height=480, background='black')
+        self._canvas.pack()
+        self._canva_scale = None
+        self._level_scale = None
+        self.fig, self.ax = None, None
+        # Set up the Slide and other choices
+        self._translation_ratio = tk.Scale(self._controlPanel, from_=-10, to=10, orient=tk.HORIZONTAL, length=115,
+                                           bg='white', command=self._apply, label='Translation ratio')
+        self._translation_ratio.place(x=130, y=90)
+        self._translation_ratio.set(5)
+        self._disparity_scale = tk.Scale(self._controlPanel, from_=0, to=150, orient=tk.HORIZONTAL, length=110,
+                                         bg='white', command=self._apply, label='Scale disparity')
+        self._disparity_scale.place(x=5, y=90)
+        self._disparity_scale.set(100)
+        # Canvas for the disparity map
+        # self.
+
+    def _apply(self, event=None):
+        level, l_th, ratio = None, None, None
+        if self._filter_gradient.get() == 'Canny':
+            l_th, ratio = self._th_low.get(), self._th_ratio.get()
+        elif self._filter_gradient.get() == 'Perso' or self._filter_gradient.get() == 'Perso2':
+            level = self._level_filter.get()
+        # self.map, self.IR, self.VIS = map_distance(self.main.gap[0], self.main.gap[1], self.main.angle,
+        #                                            self.IR_origin, self.VIS_origin,
+        #                                            level=self._level.get(),
+        #                                            method=self._filter_gradient.get(),
+        #                                            median=self._kernel_majority.get(),
+        #                                            threshold=self._threshold.get(),
+        #                                            level_pyr=level,  # For Perso filter
+        #                                            l_th=l_th, ratio=ratio,  # For Canny
+        #                                            blur_filter=self._filter_blur.get() * 2 + 1,  # For each filter
+        #                                            k_orient=(self._orientation_weight.get()),
+        #                                            return_images=True,
+        #                                            gradient_scaled=self._norm.get(),
+        #                                            uniform=self._uni.get())
+        # self._map_image = prepare_image(self.map.RGB(colormap='scale'), master=self)
+        # self._canvas.create_image(320, 240, image=self._map_image)
+        if self._display_screen:
+            self._vis = prepare_image(self.VIS, size=(480, 360), master=self)
+            self._ir = prepare_image(self.IR, size=(480, 360), master=self)
+            self._canvas_VIS.create_image(240, 180, image=self._vis)
+            self._canvas_IR.create_image(240, 180, image=self._ir)
+
+    def _change_scale(self, apply=True):
+        self._create_cmap()
+        dpi = 20
+        figh = 470 / dpi
+        figw = 50 / dpi
+        if self.ax:
+            self.ax.clear()
+            self.fig.clear()
+        self.fig, self.ax = plt.subplots(nrows=1, figsize=(figw, figh), dpi=dpi)
+        self.fig.subplots_adjust(top=1, bottom=0,
+                                 left=0, right=1)
+        gradient = np.linspace(0, 1, 256)
+        gradient = np.vstack((gradient, gradient))
+        gradient = np.rot90(gradient)
+        self.ax.imshow(gradient, aspect='auto', cmap='scale')
+        self.ax.set_axis_off()
+        if self._level_scale:
+            self._level_scale.destroy()
+            self._level_scale = tk.LabelFrame(self.master, text='Depth Scale', bg='white', width=100, height=480)
+            self._level_scale.place(x=900, y=0)
+            self._canva_scale = FigureCanvasTkAgg(self.fig, master=self._level_scale)
+            self._canva_scale.draw()
+            self._canva_scale.get_tk_widget().pack()
+        else:
+            self._level_scale = tk.LabelFrame(self.master, text='Depth Scale', bg='white', width=100, height=480)
+            self._level_scale.place(x=900, y=0)
+            self._canva_scale = FigureCanvasTkAgg(self.fig, master=self._level_scale)
+            self._canva_scale.draw()
+            self._canva_scale.get_tk_widget().pack()
+        if apply:
+            self._apply()
+
+    def _create_cmap(self):
+        level = self._level.get()
+        if level == 11:
+            cmap = plt.get_cmap('gnuplot')
+            x = np.linspace(0.0, 1.0, 256)
+        else:
+            cmap = plt.get_cmap('tab10')
+            x = np.linspace(0.0, 1.0, level)
+        cmap_rgb = cm.get_cmap(cmap)(x)[:, :3]
+        cmap_rgb[0, :] = [0, 0, 0]
+        register_cmap(cmap_rgb, 'scale')
+
+    # ########################################################################################################
 
 class DepthMapWindow(BaseFramework):
     def __init__(self, master, main):
@@ -861,21 +1050,21 @@ class DepthMapWindow(BaseFramework):
             l_th, ratio = self._th_low.get(), self._th_ratio.get()
         elif self._filter_gradient.get() == 'Perso' or self._filter_gradient.get() =='Perso2':
             level = self._level_filter.get()
-        self.map, self.IR, self.VIS = map_distance(self.main.gap[0], self.main.gap[1], self.main.angle,
-                                                   self.IR_origin, self.VIS_origin,
-                                                   level=self._level.get(),
-                                                   method=self._filter_gradient.get(),
-                                                   median=self._kernel_majority.get(),
-                                                   threshold=self._threshold.get(),
-                                                   level_pyr=level,  # For Perso filter
-                                                   l_th=l_th, ratio=ratio,  # For Canny
-                                                   blur_filter=self._filter_blur.get() * 2 + 1,  # For each filter
-                                                   k_orient=(self._orientation_weight.get()),
-                                                   return_images=True,
-                                                   gradient_scaled=self._norm.get(),
-                                                   uniform=self._uni.get())
-        self._map_image = prepare_image(self.map.RGB(colormap='scale'), master=self)
-        self._canvas.create_image(320, 240, image=self._map_image)
+        # self.map, self.IR, self.VIS = map_distance(self.main.gap[0], self.main.gap[1], self.main.angle,
+        #                                            self.IR_origin, self.VIS_origin,
+        #                                            level=self._level.get(),
+        #                                            method=self._filter_gradient.get(),
+        #                                            median=self._kernel_majority.get(),
+        #                                            threshold=self._threshold.get(),
+        #                                            level_pyr=level,  # For Perso filter
+        #                                            l_th=l_th, ratio=ratio,  # For Canny
+        #                                            blur_filter=self._filter_blur.get() * 2 + 1,  # For each filter
+        #                                            k_orient=(self._orientation_weight.get()),
+        #                                            return_images=True,
+        #                                            gradient_scaled=self._norm.get(),
+        #                                            uniform=self._uni.get())
+        # self._map_image = prepare_image(self.map.RGB(colormap='scale'), master=self)
+        # self._canvas.create_image(320, 240, image=self._map_image)
         if self._display_screen:
             self._vis = prepare_image(self.VIS, size=(480, 360), master=self)
             self._ir = prepare_image(self.IR, size=(480, 360), master=self)
