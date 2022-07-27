@@ -74,7 +74,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 # StereoDataset = __datasets__[args.dataset]
 # train_dataset = StereoDataset(args.datapath, args.trainlist, True)
 # test_dataset = StereoDataset(args.datapath, args.testlist, False)
-# TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=16, drop_last=True)
+#  TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=16, drop_last=True)
 # TestImgLoader = DataLoader(test_dataset, args.test_batch_size, shuffle=False, num_workers=16, drop_last=False)
 
 # model, optimizer
@@ -113,7 +113,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 #         adjust_learning_rate(optimizer, epoch_idx, args.lr, args.lrepochs)
 #
 #         # training
-#         for batch_idx, sample in enumerate(TrainImgLoader):
+#          for batch_idx, sample in enumerate(TrainImgLoader):
 #             global_step = len(TrainImgLoader) * epoch_idx + batch_idx
 #             start_time = time.time()
 #             do_summary = global_step % args.summary_freq == 0
@@ -170,7 +170,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 #     disp_ests = model(imgL, imgR)
 #     mask = (disp_gt < args.maxdisp) & (disp_gt > 0)
 #     if args.attention_weights_only:
-#         loss = model_loss_train_attn_only(disp_ests, disp_gt, mask)
+#          loss = model_loss_train_attn_only(disp_ests, disp_gt, mask)
 #     elif args.freeze_attention_weights:
 #         loss = model_loss_train_freeze_attn(disp_ests, disp_gt, mask)
 #     else:

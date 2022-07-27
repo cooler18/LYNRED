@@ -171,7 +171,6 @@ class ACVNet(nn.Module):
                 att_weights = self.classif_att(cost_attention)
 
         else:
-
             features_left = self.feature_extraction(left)
             features_right = self.feature_extraction(right)
             gwc_volume = build_gwc_volume(features_left["gwc_feature"], features_right["gwc_feature"], self.maxdisp // 4, self.num_groups)

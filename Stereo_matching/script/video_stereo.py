@@ -1,20 +1,17 @@
 import sys
 import os
 import argparse
-import time
-
-import cv2 as cv
-import numpy as np
 from tqdm import tqdm
-
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(SCRIPT_DIR)
 sys.path.append(os.path.dirname(SCRIPT_DIR))
+from FUSION.classes.Mask import Mask
+from FUSION.tools.method_fusion import laplacian_pyr_fusion
 from FUSION.script.image_management import name_generator, images_registration
 from FUSION.classes.Image import ImageCustom
 from FUSION.tools.registration_tools import *
-from Stereo_matching.script.paralaxe_correction import paralax_correction
-from Stereo_matching import __method_stereo__, __source_stereo__, __path_folder__
+from Stereo_matching.script.parallaxe_correction import parallax_correction
+from Stereo_matching import __method_stereo__, __source_stereo__, __mode__
 from Stereo_matching import *
 from Stereo_matching.Tools.disparity_tools import disparity_post_process, reprojection_disparity
 
@@ -62,15 +59,16 @@ if __name__ == '__main__':
     clean = args.clean
     step = args.step
     copy_disparity = args.copy_disparity
-    Time = ['Night', 'Day']
-    image_type = ['visible']#, 'visible', 'hybrid']
+    Time = ['Day']
+    image_type = ['hybrid']
     path_save = "/home/godeta/PycharmProjects/LYNRED/Video_frame"
 
     if mode == 0:
         from Stereo_matching.NeuralNetwork.ACVNet_main.ACVNet_test import ACVNet_test
         if step == 0 or step == 1:
             print(f"\n1) Registration of the frames...")
-            images_registration(verbose=False, Calibrate=False, Clean=True, path_s=path_save, new_random=False)
+            images_registration(verbose=False, Calibrate=False, Clean=True, path_s=path_save, new_random=False,
+                                Time=Time, image_type=image_type)
         else:
             print("Ignoring step 1")
 
@@ -120,8 +118,75 @@ if __name__ == '__main__':
                 out.release()
         else:
             print("Ignoring step 3")
+        if step == 4:
+            print(f"\n3) Video realisation...")
+            for t in Time:
+                video_array = []
+                print(f"\n  {t} frames concatenation...")
+                for idx, filename in tqdm(enumerate(sorted(os.listdir(
+                        join(path_save, t, "hybrid", "infrared_projected"))))):
+                    img_inf = ImageCustom(join(path_save, t, "hybrid", "infrared_projected", filename))
+                    img_vis = ImageCustom(join(path_save, t, "hybrid", "right", "right" + name_generator(idx) + '.png'))
+                    FUS = img_vis.LAB()
+                    mask = Mask(ImageCustom(cv.pyrDown(img_vis)), img_inf)
+                    mask_ssim = mask.ssim(weightRGB=2, win_size=3)
+                    FUS[:, :, 0] = laplacian_pyr_fusion(img_vis.copy(), img_inf, mask_ssim, octave=4,verbose=False)
+                    FUS = FUS.BGR()
+                    cv.putText(FUS, 'Fusion with parallax correction + mask SSIM', (10 , 25), cv.FONT_HERSHEY_SIMPLEX, 0.5,
+                               (255, 255, 255), 1)
+                    cv.putText(img_vis, 'Original RGB input', (10, 25), cv.FONT_HERSHEY_SIMPLEX, 0.5,
+                               (255, 255, 255), 1)
+
+                    frame = np.hstack([FUS, img_vis.BGR()])
+                    height, width, _ = frame.shape
+                    size = (width, height)
+                    video_array.append(frame)
+                fourcc = cv.VideoWriter_fourcc('m', 'p', '4', 'v')
+                out = cv.VideoWriter('/home/godeta/PycharmProjects/LYNRED/Video_frame/Fusion_comparison_day.mp4', fourcc,
+                                     30, size)
+
+                print(f"\n  Video encoding...")
+                for frame in tqdm(video_array):
+                    out.write(frame)
+                out.release()
+        else:
+            print("Ignoring step 3")
+        if step == 5:
+            print(f"\n3) Video realisation...")
+            for t in Time:
+                video_array = []
+                print(f"\n  {t} frames concatenation...")
+                for idx, filename in tqdm(enumerate(sorted(
+                        os.listdir('/home/godeta/PycharmProjects/LYNRED/Images/Night/master/infrared_corrected')))):
+                    img_inf = ImageCustom(join('/home/godeta/PycharmProjects/LYNRED/Images/Night/master/infrared_corrected', filename))
+                    img_vis = ImageCustom(join('/home/godeta/PycharmProjects/LYNRED/Images/Night/master/visible',
+                                               sorted(
+                        os.listdir('/home/godeta/PycharmProjects/LYNRED/Images/Night/master/visible'))[idx]))
+                    FUS = img_vis.LAB()
+                    mask = Mask(ImageCustom(cv.pyrDown(img_vis)), img_inf)
+                    mask_ssim = mask.ssim(weightRGB=2, win_size=3)
+                    FUS[:, :, 0] = laplacian_pyr_fusion(img_vis.copy(), img_inf, mask_ssim, octave=4,verbose=False)
+                    FUS = FUS.BGR()
+                    cv.putText(FUS, 'Fusion mask SSIM', (10 , 25), cv.FONT_HERSHEY_SIMPLEX, 0.5,
+                               (255, 255, 255), 1)
+                    cv.putText(img_vis, 'Original RGB input', (10, 25), cv.FONT_HERSHEY_SIMPLEX, 0.5,
+                               (255, 255, 255), 1)
+                    frame = np.hstack([FUS, img_vis.BGR()])
+                    height, width, _ = frame.shape
+                    size = (width, height)
+                    video_array.append(frame)
+                fourcc = cv.VideoWriter_fourcc('m', 'p', '4', 'v')
+                out = cv.VideoWriter('/home/godeta/PycharmProjects/LYNRED/Video_frame/Fusion_without_correction.mp4', fourcc,
+                                     30, size)
+
+                print(f"\n  Video encoding...")
+                for frame in tqdm(video_array):
+                    out.write(frame)
+                out.release()
+        else:
+            print("Ignoring step 3")
     elif mode == 1:
-        paralax_correction(post_process=post_process, index=-1, Time=Time, translation_ratio=translation_ratio, verbose=False,
+        parallax_correction(post_process=post_process, index=-1, Time=Time, translation_ratio=translation_ratio, verbose=False,
                            clean=True, step=step, new_random=False, calibrate=False, monocular=False, folder=path_save,
                            path_video=path_save, mode='video')
         print(f"Step 4) Frame concatenations :")

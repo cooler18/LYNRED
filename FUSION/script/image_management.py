@@ -65,7 +65,8 @@ def name_generator(idx):
 #########################################################################
 
 # Code for automatic images registration
-def images_registration(Time=None, image_type=None, verbose=False, Calibrate = False, Clean = False, path_s=None, new_random=False, save=True, index=-1):
+def images_registration(Time=None, image_type=None, verbose=False, Calibrate = False, Clean = False, path_s=None,
+                        new_random=False, save=True, index=-1, auto=False):
     from FUSION.tools.registration_tools import manual_registration, automatic_registration
     ## SCRIPT GLOBAL OPTIONS #####
     if Time is None:
@@ -73,11 +74,10 @@ def images_registration(Time=None, image_type=None, verbose=False, Calibrate = F
     else:
         if not Calibrate and not isinstance(Time, list):
             Time = [Time]
-
     if image_type is None:
         image_type = ["visible", "infrared", "hybrid"]
     else:
-        if not Calibrate:
+        if not Calibrate and not isinstance(image_type, list):
             image_type = [image_type]
     base_path = os.path.dirname(os.path.dirname(pathlib.Path().resolve()))
     number_of_images = 100
@@ -145,7 +145,8 @@ def images_registration(Time=None, image_type=None, verbose=False, Calibrate = F
                         imgR = join(p, 'slave', 'visible', list_right[n[i]])
                         imgL = join(p, 'master', 'infrared_corrected', list_left[n[i]])
                         imgL = ImageCustom(imgL)
-                        imgR = cv.pyrDown(ImageCustom(imgR))
+                        # imgR = cv.pyrDown(ImageCustom(imgR))
+                        imgR = ImageCustom(imgR)
                     if verbose:
                         cv.imshow('control Left', ImageCustom(imgL).BGR())
                         cv.imshow('control Right', ImageCustom(imgR).BGR())
@@ -163,7 +164,7 @@ def images_registration(Time=None, image_type=None, verbose=False, Calibrate = F
                 print(f"Automatic registration of the {i + 1} images is done !")
     else:
         if image_type == "visible":
-            if Time == "Day":
+            if Time == ["Day"] or Time == 'Day':
                 imgL = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/visible/Calibration/Calib_left.png"
                 imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/visible/Calibration/Calib_right.png"
                 path_save = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/visible/Calibration"
@@ -172,7 +173,7 @@ def images_registration(Time=None, image_type=None, verbose=False, Calibrate = F
                 imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/visible/Calibration/Calib_right.png"
                 path_save = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/visible/Calibration"
         elif image_type == 'infrared':
-            if Time == "Day":
+            if Time == ["Day"] or Time == 'Day':
                 imgL = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/infrared/Calibration/Calib_left.png"
                 imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/infrared/Calibration/Calib_right.png"
                 path_save = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/infrared/Calibration"
@@ -181,7 +182,7 @@ def images_registration(Time=None, image_type=None, verbose=False, Calibrate = F
                 imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/infrared/Calibration/Calib_right.png"
                 path_save = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/infrared/Calibration"
         else:
-            if Time == "Day":
+            if Time == ["Day"] or Time == 'Day':
                 imgL = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/hybrid/Calibration/Calib_left.png"
                 imgR = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/hybrid/Calibration/Calib_right.png"
                 path_save = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Day/hybrid/Calibration"
@@ -191,11 +192,11 @@ def images_registration(Time=None, image_type=None, verbose=False, Calibrate = F
                 path_save = "/home/godeta/PycharmProjects/LYNRED/LynredDataset/Night/hybrid/Calibration"
         if image_type == 'hybrid':
             imgL = ImageCustom(imgL).RGB()
-            imgR = cv.pyrDown(ImageCustom(imgR))
+            imgR = ImageCustom(cv.pyrDown(ImageCustom(imgR)))
         else:
             imgR = ImageCustom(imgR)
             imgL = ImageCustom(imgL)
-        manual_registration(imgL, imgR, path_save)
+        manual_registration(imgL, imgR, path_save, auto, verbose=verbose)
 
 #######################################################################
 # Script to process the infrared images using the Lynred package
@@ -203,16 +204,17 @@ def images_registration(Time=None, image_type=None, verbose=False, Calibrate = F
 
 #########################################################################
 #
-# import subprocess
-#
-# # Path to a Python interpreter that runs any Python script
-# # under the virtualenv /path/to/virtualenv/
-# python_bin = "/home/godeta/PycharmProjects/LYNRED/venv/bin/python"
-#
-# # Path to the script that must run under the virtualenv
-# script_file = "/home/godeta/PycharmProjects/LYNRED/FUSION/script/infrared_image_management.py"
-#
-# subprocess.Popen([python_bin, script_file])
+import subprocess
+
+# Path to a Python interpreter that runs any Python script
+# under the virtualenv /path/to/virtualenv/
+python_bin = "/home/godeta/PycharmProjects/LYNRED/venv/bin/python"
+
+# Path to the script that must run under the virtualenv
+script_file = "/home/godeta/PycharmProjects/LYNRED/FUSION/script/infrared_image_management.py"
+
+sub = subprocess.Popen([python_bin, script_file], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
 
 
 if __name__ == '__main__':
@@ -224,6 +226,7 @@ if __name__ == '__main__':
     parser.add_argument('--time', default=None, help='Either Day or Night')
     parser.add_argument('--type', default=None, help='Either visible or infrared')
     parser.add_argument('--calib', action='store_true', help='Calibrate the chosen images')
+    parser.add_argument('--auto', action='store_true', help='Auto- Calibrate the chosen images')
     """
     These arguments set the different parameter of the disparity estimation
     Some arguments are called only by a specific method, it wont be used if the method called is not the good one
@@ -235,6 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action='store_true', help='Show or not the results along the different steps')
     parser.add_argument('--clean', action='store_true', help='Clean the directory before to save the disparity maps')
     parser.add_argument('--new_rand', action='store_true', help='Generate a new serie of picture index')
+    parser.add_argument('--path_s', default=None, help='Path to the video folder')
 
     args = parser.parse_args()
 
@@ -244,6 +248,8 @@ if __name__ == '__main__':
     verbose = args.verbose
     clean = args.clean
     new_random = args.new_rand
+    auto = args.auto
+    path_s = args.path_s
 
-    images_registration(Time=Time, image_type=im_type, verbose=verbose, Calibrate=calibrate, Clean=clean, path_s=None,
-                        new_random=new_random)
+    images_registration(Time=Time, image_type=im_type, verbose=verbose, Calibrate=calibrate, Clean=clean, path_s=path_s,
+                        new_random=new_random, auto=auto)

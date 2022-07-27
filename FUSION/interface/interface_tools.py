@@ -40,15 +40,17 @@ def random_image_opening(verbose=1):
         Time = 'Night'
     pathrgb = join(p, "LynredDataset", Time, 'hybrid', 'right')
     pathgray = join(p, "LynredDataset", Time, 'hybrid', 'infrared_projected')
-    pathdisparity = join(p, "LynredDataset", Time, 'hybrid', 'disparity_maps')
+    pathdisparity = join(p, "LynredDataset", Time, 'hybrid', 'new_disparity')
     pathgray_origin = join(p, "LynredDataset", Time, 'hybrid', 'left')
     n = random.randint(0, len(os.listdir(pathrgb)) - 1)
     imageRGB_name = join(pathrgb, 'right' + name_generator(n) + '.png')
     imageIR_name = join(pathgray, 'left' + name_generator(n) + '.png')
-    with open(pathdisparity) as f:
-        disparity = np.array(pickle.load(f))
+    disparity_name = join(pathdisparity, 'disp' + name_generator(n))
+    # print(disparity_name)
+    with open(disparity_name, 'rb') as f:
+        disparity = pickle.load(f)
 
-    return imageRGB_name, imageIR_name, disparity, pathgray_origin
+    return imageRGB_name, imageIR_name, disparity, pathgray_origin, Time, n
 
 
 def search_number(path):

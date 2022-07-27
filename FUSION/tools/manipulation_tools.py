@@ -1,3 +1,5 @@
+import time
+
 import cv2 as cv
 import numpy as np
 from FUSION.classes.Image import ImageCustom
@@ -5,7 +7,7 @@ from FUSION.classes.Image import ImageCustom
 
 def fusion_scaled(gray, rgb, ratio=0.5):
     if gray.shape[0] == rgb.shape[0]:
-        fus = np.uint8(gray * ratio + rgb * (1 - ratio))
+        fus = np.uint8(np.min(gray * ratio + rgb * (1 - ratio), 255))
     else:
         ## If ratio = 1 : only grayscale, 0 : only vis
         if gray.shape[0] != rgb.shape[0]/2:
@@ -151,3 +153,20 @@ def choose(choice1, choice2):
     return choice
 
 
+def function_timer(activate):
+    def overload_func(func):
+        if activate:
+            print(f'The function {func} is timed'
+                  f'\nExecution....')
+            def decorateur(*args, **kwargs):
+                start = time.time()
+                output = func(*args, **kwargs)
+                print(f'Total time : {time.time()-start} seconds')
+                return output
+            return decorateur
+        else:
+            def decorateur(*args, **kwargs):
+                output = func(*args, **kwargs)
+                return output
+            return decorateur
+    return overload_func

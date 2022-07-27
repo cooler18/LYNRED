@@ -252,6 +252,7 @@ def depthMapping(sample, source, min_disp, max_disp, binary, verbose, time_of_da
         # Calculating disparity using the StereoBM algorithm
         start = time.time()
         if not(sample is None):
+            print(imgL.shape, imgR.shape)
             disparity_matrix = simple_inference(imgL, imgR, stereo)
             m, M = disparity_matrix.min(), disparity_matrix.max()
             return imgL, imgR, disparity_matrix, m, M

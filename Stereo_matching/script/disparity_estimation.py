@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(SCRIPT_DIR)
 sys.path.append(os.path.dirname(SCRIPT_DIR))
+from FUSION.classes.Image import ImageCustom
 from FUSION.tools.registration_tools import *
 from Stereo_matching import __method_stereo__, __source_stereo__
 from Stereo_matching import *
@@ -74,8 +75,10 @@ if __name__ == '__main__':
     """
     These arguments set the method and the source for the disparity estimation
     """
-    parser.add_argument('--method', default='ACVNet', choices=__method_stereo__.keys(), help='Name of the method or the Net used')
-    parser.add_argument('--source', default='lynred_vis', choices=__source_stereo__.keys(), help='Either, teddy, cones or lynred_vis / lynred_inf')
+    parser.add_argument('--method', default='ACVNet', choices=__method_stereo__.keys(),
+                        help='Name of the method or the Net used')
+    parser.add_argument('--source', default='lynred_vis', choices=__source_stereo__.keys(),
+                        help='Either, teddy, cones or lynred_vis / lynred_inf')
     parser.add_argument('--calib', action='store_true', help='Use the calibration images from the Lynred dataset')
     parser.add_argument('--index', default=-1, type=int, help='index of the picture load, -1 means random')
     parser.add_argument('--time', default='Day', help='Either Day or Night')
@@ -95,12 +98,13 @@ if __name__ == '__main__':
                         help='Apply or not a median filter on the result, enter the footprint')
     parser.add_argument('--edges', action='store_true', help='Conserve the edges, displace only the texture')
     parser.add_argument('--inpainting', action='store_true',
-                       help='Use the Inpainting function to fill the gap in the new image')
+                        help='Use the Inpainting function to fill the gap in the new image')
     parser.add_argument('--copycat', action='store_true',
-                       help='Use the second image to fill the gap in the new image')
+                        help='Use the second image to fill the gap in the new image')
     parser.add_argument('--dense', action='store_true', help='Add a densification step for the disparity map')
-    parser.add_argument('--post_process', default=0, type=int, help='Post process threshold the disparity map and remove the '
-                                                                    'outlier')
+    parser.add_argument('--post_process', default=0, type=int,
+                        help='Post process threshold the disparity map and remove the '
+                             'outlier')
     """
     These argument show the result of the operations along the way
     """
@@ -138,6 +142,12 @@ if __name__ == '__main__':
     else:
         print(f"\n0) Loading of the stereo couple {source}...")
     sample = dataloader(__source_stereo__[source], source, calib=calib, n=index, Time=Time)
+
+    imgL = ImageCustom("/home/godeta/PycharmProjects/LYNRED/Images/Day/master/visible/1594113918043_03_4103616527.png").BGR()
+    imgR = ImageCustom("/home/godeta/PycharmProjects/LYNRED/Images/Day/slave/visible/1594113916853_03_4103616529.png").BGR()
+    sample = {"imgL": np.uint8(imgL), "imgR": np.uint8(imgR)}
+    cv.imshow('test', imgL/510 + imgR/510)
+    cv.waitKey(0)
     '''
         1st-STEP: computation of the Disparity Map using the selected method
         SGM & SGBM :
@@ -147,18 +157,24 @@ if __name__ == '__main__':
     print(f"\n1) Computation of the disparity map...")
     if method == 'SGM':
         from Stereo_matching.Algorithms.SGM.OpenCv_DepthMap.depthMapping import depthMapping
-        imageL, imageR, disparity_matrix, m, M = depthMapping(sample, source, min_disp, max_disp, 0, verbose, time_of_day = 'Day', im_type = 'visible', threshold = 0)
-    if method == 'SBGM':
+
+        imageL, imageR, disparity_matrix, m, M = depthMapping(sample, source, min_disp, max_disp, 0, verbose,
+                                                              time_of_day='Day', im_type='visible', threshold=0)
+    if method == 'SGBM':
         from Stereo_matching.Algorithms.SGM.OpenCv_DepthMap.depthMapping import depthMapping
-        imageL, imageR, disparity_matrix, m, M = depthMapping(sample, source, min_disp, max_disp, 1, verbose, time_of_day = 'Day', im_type = 'visible', threshold = 0)
+
+        imageL, imageR, disparity_matrix, m, M = depthMapping(sample, source, min_disp, max_disp, 1, verbose,
+                                                              time_of_day='Day', im_type='visible', threshold=0)
     elif method == 'MobileStereoNet':
         from Stereo_matching.NeuralNetwork.MobileStereoNet.MobileStereoNet import mobilestereonet
+
         imageL, imageR, disparity_matrix, m, M = mobilestereonet(sample, verbose=verbose)
         imageL, imageR = np.uint8(imageL * 255), np.uint8(imageR * 255)
     elif method == 'ACVNet':
         from Stereo_matching.NeuralNetwork.ACVNet_main.ACVNet_test import ACVNet_test
+
         imageL, imageR, disparity_matrix, m, M = ACVNet_test(sample, verbose=verbose)
-        imageL, imageR = np.uint8(imageL*255), np.uint8(imageR*255)
+        imageL, imageR = np.uint8(imageL * 255), np.uint8(imageR * 255)
     '''
         2nd-STEP: Densification and amelioration of the Disparity Map (optionnal) :
     '''
@@ -192,6 +208,8 @@ if __name__ == '__main__':
     error_estimation(image_corrected_gray, ref, ignore_undefined=True)
     cv.imshow('Reconstruct image', image_corrected / 255)
     cv.imshow('Difference Reconstruct left Right', abs(image_corrected_gray / 255 - ref / 255))
+    d = ImageCustom(disparity_matrix/disparity_matrix.max()*255).RGB('viridis').BGR()
+    cv.imshow('Disparity matrix', d)
     plt.matshow(disparity_matrix)
     plt.colorbar()
 
@@ -199,4 +217,3 @@ if __name__ == '__main__':
     plt.show()
     cv.waitKey(0)
     cv.destroyAllWindows()
-

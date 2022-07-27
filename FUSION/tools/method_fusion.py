@@ -1,3 +1,6 @@
+import os
+import sys
+
 import matplotlib.pyplot as plt
 
 from FUSION.tools.data_management_tools import register_cmap_Lynred
@@ -6,8 +9,8 @@ from FUSION.tools.manipulation_tools import *
 import numpy as np
 from matplotlib import cm
 from FUSION.classes.Image import ImageCustom
-from skimage import filters, morphology
-from FUSION.tools import mapping_tools as m_tools
+from . import __domain__
+from .image_processing_tools import laplacian_fusion
 
 
 def colormap_fusion(ir_gray, rgb, ratio=-1, colormap='inferno'):
@@ -25,21 +28,11 @@ def colormap_fusion2(ir_gray, rgb, ratio=0.5, colormap='inferno'):
 
 
 def grayscale_fusion(gray, rgb, ratio=-1, domain='LAB'):
-    if domain == 'LAB':
-        rgb = rgb.LAB()
-    elif domain == 'HSV':
-        rgb = rgb.HSV()
-    fusion = np.zeros_like(rgb)
-    if domain == 'HSV':
-        fusion[:, :, 0] = rgb[:, :, 0]
-        fusion[:, :, 1] = rgb[:, :, 1]
-        fusion[:, :, 2] = fusion_scaled(gray, rgb[:, :, 2], ratio=ratio)
-        fusion = ImageCustom(fusion, rgb).RGB()
-    if domain == 'LAB':
-        fusion[:, :, 1] = rgb[:, :, 1]
-        fusion[:, :, 2] = rgb[:, :, 2]
-        fusion[:, :, 0] = fusion_scaled(gray, rgb[:, :, 0], ratio=ratio)
-        fusion = fusion.RGB()
+    rgb = __domain__[domain][0](rgb)
+    idx = __domain__[domain][1]
+    fusion = rgb.copy()
+    fusion[:, :, idx] = fusion_scaled(gray, rgb[:, :, idx], ratio=ratio)
+    fusion = ImageCustom(fusion, rgb).RGB()
     return fusion
 
 
@@ -67,3 +60,33 @@ def Harr_fus(gray, rgb, ratio=0.5, level=1):
     image = image/image.max()*255
     image = np.stack([image, rgb[:, :, 1], rgb[:, :, 2]], axis=2)
     return ImageCustom(image, rgb).RGB()
+
+
+def mask_fusion_intensity(RGB, IR):
+    temp = np.ones_like(RGB)
+    return ImageCustom(np.minimum(temp, RGB/255 - IR/255)*255).gaussian_filter(3)
+
+def laplacian_pyr_fusion(image1, image2, mask, octave=4, verbose=False):
+    if image1.shape[0] > image2.shape[0]:
+        temp = image1.LAB()[:, :, 0]
+        image_detail = ImageCustom(cv.pyrUp(cv.pyrDown(temp))).diff(temp)
+        image1 = ImageCustom(cv.pyrDown(temp))
+        image2 = ImageCustom(image2)
+    elif image1.shape[0] < image2.shape[0]:
+        temp = image2.LAB()[:, :, 0]
+        image_detail = ImageCustom(cv.pyrUp(cv.pyrDown(temp)))/255 - temp/255
+        image2 = ImageCustom(cv.pyrDown(temp))
+        image1 = ImageCustom(image1)
+    else:
+        image_detail = None
+    pyr1 = image1.GRAYSCALE().pyr_gauss(octave=octave, interval=2, sigma0=2)
+    pyr2 = image2.GRAYSCALE().pyr_gauss(octave=octave, interval=2, sigma0=2)
+    fus = laplacian_fusion(pyr1, pyr2, mask, verbose=verbose)
+    if image_detail is not None:
+        return ImageCustom(cv.pyrUp(fus)) + image_detail
+    else:
+        return fus
+
+def mean(im1, im2):
+    return ImageCustom(im1/2 + im2/2)
+

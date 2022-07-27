@@ -60,7 +60,7 @@ def reconstruction_from_disparity(imageL, imageR, disparity_matrix, min_disp=0, 
                 else:
                     new_image[:, - k:-dx - k][temp > 0] = temp[temp > 0]
             if verbose:
-                cv.imshow('New image', new_image / 255)
+                cv.imshow('New image', new_image)
                 cv.waitKey(int(1000 / max_disp))
         if right2left:
             new_image_cropped = new_image[:, dx:]
@@ -140,64 +140,67 @@ def reprojection_disparity(disparity_map, translation_ratio, verbose=False):
     start = time.time()
     new_values = np.round(disparity_map * (1 - translation_ratio))
     new_ref = np.round(disparity_map * translation_ratio)
-    if new_ref.max() <= 0:
-        max_disp = -abs(new_ref).max()
-        min_disp = -abs(new_ref).min()
-    else:
-        max_disp = new_ref.max()
-        min_disp = new_ref.min()
-    right2left = max_disp > min_disp
-    if max_disp * min_disp < 0:
-        dx = int(abs(max_disp - min_disp))
-    else:
-        dx = int(abs(max_disp))
-    new_disparity = np.ones([disparity_map.shape[0], disparity_map.shape[1] + int(dx)]) * -1000
-    if right2left:
-        step = 1
-    else:
-        step = -1
-    for k in range(int(min_disp), int(max_disp), step):
-        mask = new_ref == k
-        if right2left:
-            if k == 0:
-                new_disparity[:, dx:][mask == 1] = new_values[mask == 1]
-            else:
-                new_disparity[:, dx - k:-k][mask == 1] = new_values[mask == 1]
+    if new_ref.max() != new_ref.min():
+        if new_ref.max() <= 0:
+            max_disp = -abs(new_ref).max()
+            min_disp = -abs(new_ref).min()
         else:
-            if k == dx:
-                new_disparity[:, :-dx][mask == 1] = new_values[mask == 1]
+            max_disp = new_ref.max()
+            min_disp = new_ref.min()
+        right2left = max_disp > min_disp
+        if max_disp * min_disp < 0:
+            dx = int(abs(max_disp - min_disp))
+        else:
+            dx = int(abs(max_disp))
+        new_disparity = np.ones([disparity_map.shape[0], disparity_map.shape[1] + int(dx)]) * -1000
+        if right2left:
+            step = 1
+        else:
+            step = -1
+        for k in range(int(min_disp), int(max_disp), step):
+            mask = new_ref == k
+            if right2left:
+                if k == 0:
+                    new_disparity[:, dx:][mask == 1] = new_values[mask == 1]
+                else:
+                    new_disparity[:, dx - k:-k][mask == 1] = new_values[mask == 1]
             else:
-                new_disparity[:, -k:-dx - k][mask == 1] = new_values[mask == 1]
+                if k == dx:
+                    new_disparity[:, :-dx][mask == 1] = new_values[mask == 1]
+                else:
+                    new_disparity[:, -k:-dx - k][mask == 1] = new_values[mask == 1]
+            if verbose:
+                temp = new_disparity.copy()
+                temp[temp == -1000] = 0
+                if temp.max() <= 0:
+                    m = -(abs(temp).max())
+                else:
+                    m = temp.max()
+                cv.imshow('New disparity image', temp / m)
+                cv.waitKey(int(abs(1000 / max_disp)))
+        if not right2left:
+            new_disparity_cropped = new_disparity[:, dx:]
+        else:
+            new_disparity_cropped = new_disparity[:, :-dx]
         if verbose:
-            temp = new_disparity.copy()
-            temp[temp == -1000] = 0
-            if temp.max() <= 0:
-                m = -(abs(temp).max())
-            else:
-                m = temp.max()
-            cv.imshow('New disparity image', temp / m)
-            cv.waitKey(int(abs(1000 / max_disp)))
-    if not right2left:
-        new_disparity_cropped = new_disparity[:, dx:]
+            print(f"    Reconstruction done in : {time.time() - start} seconds")
+        '''
+        Image post processing options
+        '''
+        start = time.time()
+        new_disparity_cropped[new_disparity_cropped == -1000] = 0
+        new_disparity_cropped[new_disparity_cropped == 0] = median_filter(new_disparity_cropped, size=5)[
+            new_disparity_cropped == 0]
+        if verbose:
+            print(f"    Median filtering done in : {round(time.time() - start, 2)} seconds")
+            if new_disparity_cropped.max() <= 0:
+                m = -abs(new_disparity_cropped).max()
+            cv.imshow('Original disparity image', disparity_map / disparity_map.max())
+            cv.imshow('New disparity image', new_disparity_cropped / m)
+            cv.waitKey(0)
+            cv.destroyAllWindows()
     else:
-        new_disparity_cropped = new_disparity[:, :-dx]
-    if verbose:
-        print(f"    Reconstruction done in : {time.time() - start} seconds")
-    '''
-    Image post processing options
-    '''
-    start = time.time()
-    new_disparity_cropped[new_disparity_cropped == -1000] = 0
-    new_disparity_cropped[new_disparity_cropped == 0] = median_filter(new_disparity_cropped, size=5)[
-        new_disparity_cropped == 0]
-    if verbose:
-        print(f"    Median filtering done in : {round(time.time() - start, 2)} seconds")
-        if new_disparity_cropped.max() <= 0:
-            m = -abs(new_disparity_cropped).max()
-        cv.imshow('Original disparity image', disparity_map / disparity_map.max())
-        cv.imshow('New disparity image', new_disparity_cropped / m)
-        cv.waitKey(0)
-        cv.destroyAllWindows()
+        new_disparity_cropped = disparity_map
     return new_disparity_cropped
 
 

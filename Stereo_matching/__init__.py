@@ -2,7 +2,7 @@ from Stereo_matching.Tools import *
 
 __method_stereo__ = {
     "SGM": 'SGM',
-    "SBGM": 'SBGM',
+    "SGBM": 'SGBM',
     "ACVNet": "ACVNet",
     "MobileStereoNet": 'MobileStereoNet'
 }
@@ -13,7 +13,7 @@ __source_stereo__ = {
     "lynred_inf": "/home/godeta/PycharmProjects/LYNRED/LynredDataset",
     "lynred_vis": "/home/godeta/PycharmProjects/LYNRED/LynredDataset"
 }
-__path_folder__ = {
+__mode__ = {
     "image": "/home/godeta/PycharmProjects/LYNRED/LynredDataset",
     'video': "/home/godeta/PycharmProjects/LYNRED/Video_frame"
 }

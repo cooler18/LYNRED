@@ -76,8 +76,8 @@ def dataloader(source_path, source, calib=False, Time='Day', n=-1):
         }
     else:
         sample = {
-            'imgL': cv.imread(l_path, 1)/255,
-            'imgR': cv.imread(r_path, 1)/255
+            'imgL': cv.imread(l_path, 0)/255,
+            'imgR': cv.imread(r_path, 0)/255
         }
     return sample
 

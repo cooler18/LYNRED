@@ -16,11 +16,12 @@ import pywt
 import pywt.data
 
 
-def edges_extraction(image, method="Canny", kernel_size=3, kernel_blur=3, low_threshold=5, ratio=3, level=2,
+def edges_extraction(image, method="Canny", kernel_size=3, kernel_blur=5, low_threshold=5, ratio=3, level=2,
                      orientation=False):
-    if image.cmap != "GRAYSCALE":
-        image = image.GRAYSCALE()
-    i = image.copy()
+    if image.cmap != "GRAYSCALE" and len(image.shape) == 3:
+        i = image.GRAYSCALE()
+    else:
+        i = image.copy()
     orient = np.zeros_like(image)
     if kernel_blur > 1:
         image = cv.bilateralFilter(image, kernel_blur, kernel_blur * 2, kernel_blur / 2)
@@ -67,7 +68,7 @@ def edges_extraction(image, method="Canny", kernel_size=3, kernel_blur=3, low_th
         # I = abs(image / 255 - text) * 255
     else:
         I = cv.Canny(image, low_threshold, low_threshold * ratio)
-    I = ImageCustom(I, i)
+    I = ImageCustom(I/I.max()*255, i)
     I.cmap = 'EDGES'
     if orientation:
         return I, orient
@@ -201,15 +202,49 @@ def edge_correlation(image_ir, image_rgb, idx, x_step, y_step, orient_ir, orient
 
 
 def grad(image):
+    if len(image.shape) == 3:
+        image = ImageCustom(image).GRAYSCALE()
     Ix = cv.Sobel(image, cv.CV_64F, 1, 0, borderType=cv.BORDER_REFLECT_101)
     Iy = cv.Sobel(image, cv.CV_64F, 0, 1, borderType=cv.BORDER_REFLECT_101)
     grad = np.sqrt(Ix ** 2 + Iy ** 2)
+    grad[grad < grad.mean()] = 0
+    grad[grad > grad.mean()*5] = grad.mean()*5
     orient = cv.phase(Ix, Iy, angleInDegrees=True)
 
     v = cv.normalize(grad, None, 0, 255, cv.NORM_MINMAX)
-    v[v < 20] = 0
     s = np.ones_like(grad) * 255
     h = cv.normalize(abs(abs(orient - 180) - 90), None, 0, 255, cv.NORM_MINMAX)
     output = np.uint8(np.stack([h, s, v], axis=-1))
     output = cv.cvtColor(output, cv.COLOR_HSV2BGR)
     return ImageCustom(output)
+
+
+def create_gaborfilter(num_filters=4, ksize=5, sigma=2.0):
+    # This function is designed to produce a set of GaborFilters
+    # an even distribution of theta values equally distributed amongst pi rad / 180 degree
+    filters = []
+    # The local area to evaluate
+    # Larger Values produce more edges
+    lambd = 10.0
+    gamma = 0.5
+    psi = 0  # Offset value - lower generates cleaner results
+    for theta in np.arange(0, np.pi, np.pi / num_filters):  # Theta is the orientation for edge detection
+        kern = cv.getGaborKernel((ksize, ksize), sigma, theta, lambd, gamma, psi, ktype=cv.CV_64F)
+        kern /= 1.0 * kern.sum()  # Brightness normalization
+        filters.append(kern)
+    return filters
+
+
+def apply_filter(img, filters):
+    # This general function is designed to apply filters to our image
+    # First create a numpy array the same size as our input image
+    newimage = np.zeros_like(img)
+    # Starting with a blank image, we loop through the images and apply our Gabor Filter
+    # On each iteration, we take the highest value (super impose), until we have the max value across all filters
+    # The final image is returned
+    depth = -1  # remain depth same as original image
+    for kern in filters:  # Loop through the kernels in our GaborFilter
+        image_filter = cv.filter2D(img, depth, kern)  # Apply filter to image
+        # Using Numpy.maximum to compare our filter and cumulative image, taking the higher value (max)
+        np.maximum(newimage, image_filter, newimage)
+    return newimage

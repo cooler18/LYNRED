@@ -70,8 +70,8 @@ if __name__ == '__main__':
         m, M = disparity.min(), disparity.max()
         disparity = (disparity - m)/(M - m)
 
-        vis = cv.imread(join(base_path, "LynredDataset", Time + "/hybrid/visible/vis" + number + '.png'), 1)
-        inf = cv.imread(join(base_path, "LynredDataset", Time + "/hybrid/infrared/inf" + number + '.png'), 0)
+        vis = cv.imread(join(base_path, "LynredDataset", Time + "/hybrid/right/right" + number + '.png'), 1)
+        inf = cv.imread(join(base_path, "LynredDataset", Time + "/hybrid/left/left" + number + '.png'), 0)
         print(disparity.shape, inf.shape)
         # image_corrected = reconstruction_from_disparity(inf, inf, disparity, m, M, 0,
         #                                                 False, True, False, True, False, orientation=0)
